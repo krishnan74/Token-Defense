@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { AccountInterface } from 'starknet';
-import { buildCommitCalldata, buildContractAddresses } from '../dojo/contracts';
+import { buildContractAddresses } from '../dojo/contracts';
 import type { ManifestContract } from '../dojo/models';
 
 export function useActions(
@@ -40,20 +40,5 @@ export function useActions(
       call(addresses.building, 'upgrade_factory', [factoryId as number]),
 
     startWave: () => call(addresses.wave, 'start_wave'),
-
-    commitWaveResult: (
-      towerIds: number[],
-      towerDamages: number[],
-      goldFromKills: number,
-      inputConsumed: number,
-      imageConsumed: number,
-      codeConsumed: number,
-      baseDamage: number,
-    ) =>
-      call(
-        addresses.wave,
-        'commit_wave_result',
-        buildCommitCalldata({ towerIds, towerDamages, goldFromKills, inputConsumed, imageConsumed, codeConsumed, baseDamage }),
-      ),
   };
 }

@@ -1,10 +1,13 @@
 {
   "world": {
-    "class_hash": "0x719a487386c83521263c65f00336ef833ec738fc980fd755f9b641cf6b93f40",
-    "address": "0x1eaca139f880c110e55db572ffac49821f71624d7b31119c11693375088c966",
+    "class_hash": "0x206b18ee1b2e79f5ad30f5871be57354bf81feb9f88e0ac10d829a3208932b0",
+    "address": "0x6e075b911d34e634b432de21fb25bf402d70e7cba4d182a41927a75adff4965",
     "seed": "dojo_intro",
     "name": "Dojo intro",
     "entrypoints": [
+      "set_entity_test",
+      "delete_entity_test",
+      "emit_event_test",
       "uuid",
       "set_metadata",
       "register_namespace",
@@ -33,18 +36,37 @@
   },
   "contracts": [
     {
-      "address": "0x49fe994f16db2769fe8bac5812413413fa4fa59cfb6f50e7818f679622c4882",
-      "class_hash": "0x33363f7bdea2d51923840bcf83f639e82698e12585fb604215fac1f2b4320d3",
+      "address": "0x6dbe32636a5775508a95b6d1c2c47d0a02698be40fd58ba94cc9cb3e4cff377",
+      "class_hash": "0x37404d8ef3b7a0810226ca645d4b8e9a99f8210f42d8348b1a3eb209ac91f3e",
       "init_calldata": [],
-      "tag": "di-actions",
-      "selector": "0x4c09d12108e978b8c073f8d7186ed1aa144777a0aad9d1334532b5813038897",
+      "tag": "di-building_system",
+      "selector": "0x2aa8fcc21e02a2df7334b785cda63fde60c5636a35624b7825475d20f72e8fa",
       "systems": [
-        "new_game",
         "place_tower",
         "place_factory",
         "upgrade_factory",
+        "upgrade"
+      ]
+    },
+    {
+      "address": "0x3e5dbf1cd120b8b13400e19822f17af486729d5992a874c93338114e29b37df",
+      "class_hash": "0x5d8763b70d6e00f247c717264be9fcc71e542f214813b85dd80057af56bc37b",
+      "init_calldata": [],
+      "tag": "di-game_system",
+      "selector": "0x17ae3d72e533c01e49888b63e252bc36a8f2aa7d4c77ba0bd0d522164259673",
+      "systems": [
+        "new_game",
+        "upgrade"
+      ]
+    },
+    {
+      "address": "0x19769fe60733c1eea52f81ad367ad51b2329576032489f44f3d9972e82ee0bc",
+      "class_hash": "0x299e79b08cc406c2aca0b91f5dabbd577ae4ce1743865376d7fc7bd10fd0de7",
+      "init_calldata": [],
+      "tag": "di-wave_system",
+      "selector": "0x2327027e692be18fb4f0748d22913dc03a9fd35a5712d78033d792e4db2327c",
+      "systems": [
         "start_wave",
-        "commit_wave_result",
         "upgrade"
       ]
     }
@@ -111,11 +133,6 @@
           "key": false
         },
         {
-          "name": "is_wave_active",
-          "type": "core::bool",
-          "key": false
-        },
-        {
           "name": "game_over",
           "type": "core::bool",
           "key": false
@@ -149,9 +166,14 @@
           "name": "code_tokens",
           "type": "core::integer::u32",
           "key": false
+        },
+        {
+          "name": "base_health",
+          "type": "core::integer::u32",
+          "key": false
         }
       ],
-      "class_hash": "0x3cab76fcb278402caa9321930680ae1320b8fd25062b87eef68485f21dc1ff0",
+      "class_hash": "0x6d35f0d11e467f86bd2112ad60070f6c86b112c2d709b183d2ff125885cb77",
       "tag": "di-GameState",
       "selector": "0x520c18d6619456798fbcb4ba5476d0480a79a9c6ae1948f8a119bf0b4c10ac7"
     },
@@ -1323,6 +1345,92 @@
       ]
     },
     {
+      "type": "interface",
+      "name": "dojo::world::iworld::IWorldTest",
+      "items": [
+        {
+          "type": "function",
+          "name": "set_entity_test",
+          "inputs": [
+            {
+              "name": "model_selector",
+              "type": "core::felt252"
+            },
+            {
+              "name": "index",
+              "type": "dojo::model::definition::ModelIndex"
+            },
+            {
+              "name": "values",
+              "type": "core::array::Span::<core::felt252>"
+            },
+            {
+              "name": "layout",
+              "type": "dojo::meta::layout::Layout"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "delete_entity_test",
+          "inputs": [
+            {
+              "name": "model_selector",
+              "type": "core::felt252"
+            },
+            {
+              "name": "index",
+              "type": "dojo::model::definition::ModelIndex"
+            },
+            {
+              "name": "layout",
+              "type": "dojo::meta::layout::Layout"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "emit_event_test",
+          "inputs": [
+            {
+              "name": "event_selector",
+              "type": "core::felt252"
+            },
+            {
+              "name": "keys",
+              "type": "core::array::Span::<core::felt252>"
+            },
+            {
+              "name": "values",
+              "type": "core::array::Span::<core::felt252>"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "dojo_contract_address",
+          "inputs": [
+            {
+              "name": "contract_selector",
+              "type": "core::felt252"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
       "type": "enum",
       "name": "dojo::world::resource::Resource",
       "variants": [
@@ -2063,10 +2171,6 @@
           "type": "core::integer::u32"
         },
         {
-          "name": "is_wave_active",
-          "type": "core::bool"
-        },
-        {
           "name": "game_over",
           "type": "core::bool"
         },
@@ -2092,6 +2196,10 @@
         },
         {
           "name": "code_tokens",
+          "type": "core::integer::u32"
+        },
+        {
+          "name": "base_health",
           "type": "core::integer::u32"
         }
       ]
@@ -2109,10 +2217,6 @@
           "type": "core::integer::u32"
         },
         {
-          "name": "is_wave_active",
-          "type": "core::bool"
-        },
-        {
           "name": "game_over",
           "type": "core::bool"
         },
@@ -2138,6 +2242,10 @@
         },
         {
           "name": "code_tokens",
+          "type": "core::integer::u32"
+        },
+        {
+          "name": "base_health",
           "type": "core::integer::u32"
         }
       ]
@@ -2230,15 +2338,8 @@
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::actions::IActions",
+      "name": "dojo_intro::systems::building::IBuildingSystem",
       "items": [
-        {
-          "type": "function",
-          "name": "new_game",
-          "inputs": [],
-          "outputs": [],
-          "state_mutability": "external"
-        },
         {
           "type": "function",
           "name": "place_tower",
@@ -2290,31 +2391,34 @@
           ],
           "outputs": [],
           "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "dojo_intro::systems::building::building_system::Event",
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "UpgradeableEvent",
+          "type": "dojo::contract::components::upgradeable::upgradeable_cpt::Event",
+          "kind": "nested"
         },
         {
+          "name": "WorldProviderEvent",
+          "type": "dojo::contract::components::world_provider::world_provider_cpt::Event",
+          "kind": "nested"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "dojo_intro::systems::game::IGameSystem",
+      "items": [
+        {
           "type": "function",
-          "name": "start_wave",
+          "name": "new_game",
           "inputs": [],
-          "outputs": [],
-          "state_mutability": "external"
-        },
-        {
-          "type": "function",
-          "name": "commit_wave_result",
-          "inputs": [
-            {
-              "name": "tower_ids",
-              "type": "core::array::Array::<core::integer::u32>"
-            },
-            {
-              "name": "tower_damages",
-              "type": "core::array::Array::<core::integer::u32>"
-            },
-            {
-              "name": "gold_earned",
-              "type": "core::integer::u32"
-            }
-          ],
           "outputs": [],
           "state_mutability": "external"
         }
@@ -2322,7 +2426,37 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::actions::actions::Event",
+      "name": "dojo_intro::systems::game::game_system::Event",
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "UpgradeableEvent",
+          "type": "dojo::contract::components::upgradeable::upgradeable_cpt::Event",
+          "kind": "nested"
+        },
+        {
+          "name": "WorldProviderEvent",
+          "type": "dojo::contract::components::world_provider::world_provider_cpt::Event",
+          "kind": "nested"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "dojo_intro::systems::wave::IWaveSystem",
+      "items": [
+        {
+          "type": "function",
+          "name": "start_wave",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "dojo_intro::systems::wave::wave_system::Event",
       "kind": "enum",
       "variants": [
         {

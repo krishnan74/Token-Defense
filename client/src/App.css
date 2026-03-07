@@ -132,6 +132,48 @@
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
 }
 
+/* ── Wave resolving overlay ─────────────────────────────────────────────── */
+.app-resolving-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 200;
+}
+
+.app-resolving-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 40px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+  font-family: monospace;
+}
+
+.app-resolving-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(56, 142, 60, 0.2);
+  border-top-color: #388E3C;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.app-resolving-text {
+  font-size: 13px;
+  color: #388E3C;
+  font-weight: bold;
+}
+
 /* ── Wave result overlay ────────────────────────────────────────────────── */
 .app-result-overlay {
   position: fixed;

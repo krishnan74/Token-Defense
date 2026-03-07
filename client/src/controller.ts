@@ -38,8 +38,7 @@ const controllerOpts = {
           name: 'Token Defense — Wave',
           description: 'Wave lifecycle',
           methods: [
-            { name: 'Start Wave',         entrypoint: 'start_wave',         description: 'Begin the next enemy wave' },
-            { name: 'Commit Wave Result', entrypoint: 'commit_wave_result', description: 'Submit wave outcome to chain' },
+            { name: 'Start Wave', entrypoint: 'start_wave', description: 'Begin the next enemy wave' },
           ],
         },
       }),

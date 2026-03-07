@@ -4,7 +4,6 @@ export interface GameState {
   player: string;
   wave_number: number;
   gold: number;
-  is_wave_active: boolean;
   game_over: boolean;
   victory: boolean;
   next_tower_id: number;
@@ -34,17 +33,6 @@ export interface Factory {
   y: number;
   level: number;
   is_active: boolean;
-}
-
-/** Arguments for commit_wave_result — kept as a typed object to avoid arg-order bugs. */
-export interface CommitWaveArgs {
-  towerIds: number[];
-  towerDamages: number[];
-  goldFromKills: number;
-  inputConsumed: number;
-  imageConsumed: number;
-  codeConsumed: number;
-  baseDamage: number;
 }
 
 /** Manifest contract entry shape. */

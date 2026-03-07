@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeysClause, ToriiQueryBuilder } from '@dojoengine/sdk';
 import type { AccountInterface } from 'starknet';
 import { useDojoSDK } from '../dojo/DojoContext';
@@ -8,33 +8,39 @@ export function useGameState(account: AccountInterface | null | undefined): {
   gameState: GameState | null;
   towers: Tower[];
   factories: Factory[];
+  refreshGameState: () => Promise<void>;
 } {
   const sdk = useDojoSDK();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [towers, setTowers] = useState<Tower[]>([]);
   const [factories, setFactories] = useState<Factory[]>([]);
+  const accountRef = useRef(account);
+  accountRef.current = account;
+
+  const handleEntities = useCallback((entities: unknown[]) => {
+    const newTowers: Tower[] = [];
+    const newFactories: Factory[] = [];
+
+    for (const entity of entities as Array<{ models?: { di?: { GameState?: GameState; Tower?: Tower; Factory?: Factory } } }>) {
+      const models = entity.models?.di;
+      if (!models) continue;
+
+      if (models.GameState) {
+        console.log('[Torii] GameState update:', models.GameState);
+        setGameState(models.GameState);
+      }
+      if (models.Tower) newTowers.push(models.Tower);
+      if (models.Factory) newFactories.push(models.Factory);
+    }
+
+    if (newTowers.length) setTowers((prev) => mergeById(prev, newTowers, 'tower_id'));
+    if (newFactories.length) setFactories((prev) => mergeById(prev, newFactories, 'factory_id'));
+  }, []);
 
   useEffect(() => {
     if (!account || !sdk) return;
 
     let subscription: { cancel: () => void } | null = null;
-
-    const handleEntities = (entities: unknown[]) => {
-      const newTowers: Tower[] = [];
-      const newFactories: Factory[] = [];
-
-      for (const entity of entities as Array<{ models?: { di?: { GameState?: GameState; Tower?: Tower; Factory?: Factory } } }>) {
-        const models = entity.models?.di;
-        if (!models) continue;
-
-        if (models.GameState) setGameState(models.GameState);
-        if (models.Tower) newTowers.push(models.Tower);
-        if (models.Factory) newFactories.push(models.Factory);
-      }
-
-      if (newTowers.length) setTowers((prev) => mergeById(prev, newTowers, 'tower_id'));
-      if (newFactories.length) setFactories((prev) => mergeById(prev, newFactories, 'factory_id'));
-    };
 
     async function subscribe() {
       const [initialEntities, sub] = await sdk.subscribeEntityQuery({
@@ -46,8 +52,9 @@ export function useGameState(account: AccountInterface | null | undefined): {
           ).build(),
         ),
         callback: ({ data, error }: { data?: unknown[]; error?: unknown }) => {
+          console.log('[Torii] subscription callback — data:', data, 'error:', error);
           if (data) handleEntities(data);
-          if (error) console.error('[Torii]', error);
+          if (error) console.error('[Torii] subscription error:', error);
         },
       });
 
@@ -60,9 +67,29 @@ export function useGameState(account: AccountInterface | null | undefined): {
     return () => {
       subscription?.cancel();
     };
-  }, [account, sdk]);
+  }, [account, sdk, handleEntities]);
 
-  return { gameState, towers, factories };
+  const refreshGameState = useCallback(async () => {
+    const acct = accountRef.current;
+    if (!acct || !sdk) return;
+    try {
+      const result = await sdk.getEntities({
+        query: new ToriiQueryBuilder().withClause(
+          KeysClause(
+            ['di-GameState', 'di-Tower', 'di-Factory'],
+            [acct.address],
+            'VariableLen',
+          ).build(),
+        ),
+      });
+      console.log('[Torii] poll result:', result);
+      if (result?.items?.length) handleEntities(result.items as unknown[]);
+    } catch (e) {
+      console.error('[Torii] poll error:', e);
+    }
+  }, [sdk, handleEntities]);
+
+  return { gameState, towers, factories, refreshGameState };
 }
 
 function mergeById<T extends Record<string, unknown>>(

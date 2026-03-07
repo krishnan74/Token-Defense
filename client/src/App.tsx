@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AccountInterface } from 'starknet';
 import BuildMenu from './components/BuildMenu';
 import GameBoard from './components/GameBoard';
@@ -10,8 +10,6 @@ import type { ManifestContract } from './dojo/models';
 import { useActions } from './hooks/useActions';
 import { useBGM } from './hooks/useBGM';
 import { useGameState } from './hooks/useGameState';
-import { WaveSimulator } from './simulation/WaveSimulator';
-import type { WaveResult, WaveSnapshot } from './simulation/WaveSimulator';
 
 interface AppProps {
   account: AccountInterface | null;
@@ -23,49 +21,40 @@ export interface BuildSelection {
   id: number;
 }
 
-interface PostWaveHealths {
-  [towerId: string]: { health: number; is_alive: boolean };
-}
-
-interface WaveResultSummary {
-  waveNumber: number;
-  goldEarned: number;
-  enemiesKilled: number;
-  baseDamage: number;
-  baseHealthRemaining: number;
-}
-
 interface UpgradeOptimistic {
   counts: Record<string, number>;
   gold: number;
 }
 
+interface WaveResultSummary {
+  waveNumber: number;
+  goldEarned: number;
+  baseDamage: number;
+  baseHealthRemaining: number;
+}
+
 export default function App({ account, manifest }: AppProps) {
-  const { gameState, towers, factories } = useGameState(account);
+  const { gameState, towers, factories, refreshGameState } = useGameState(account);
   const actions = useActions(account, manifest);
   const { isMuted, toggleMute } = useBGM();
 
-  const [selectedBuild, setSelectedBuild] = useState<BuildSelection | null>(null);
-  const [isWaveActive, setIsWaveActive] = useState(false);
-  const [waveSnapshot, setWaveSnapshot] = useState<WaveSnapshot | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [waveResult, setWaveResult] = useState<WaveResultSummary | null>(null);
 
+  const [selectedBuild, setSelectedBuild] = useState<BuildSelection | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
+  const [waveResult, setWaveResult] = useState<WaveResultSummary | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Optimistic UI for building placement / upgrades
   const [optimisticTowers, setOptimisticTowers] = useState<unknown[]>([]);
   const [optimisticFactories, setOptimisticFactories] = useState<unknown[]>([]);
   const [optimisticGoldSpent, setOptimisticGoldSpent] = useState(0);
   const [upgradeOptimistic, setUpgradeOptimistic] = useState<UpgradeOptimistic>({ counts: {}, gold: 0 });
 
-  const [postWaveTokens, setPostWaveTokens] = useState<Record<string, number> | null>(null);
-  const [postWaveHealths, setPostWaveHealths] = useState<PostWaveHealths>({});
-  const [postWaveBaseHealth, setPostWaveBaseHealth] = useState<number | null>(null);
+  // Snapshot of game state just before wave fires — used to compute result diff
+  const preWaveStateRef = useRef<typeof gameState>(null);
 
-  const simulatorRef = useRef<WaveSimulator | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number | null>(null);
-  const prevFactoriesRef = useRef<unknown[]>([]);
-
+  // Clear optimistic towers once Torii confirms matching position
   useEffect(() => {
     if (!optimisticTowers.length) return;
     setOptimisticTowers((prev) =>
@@ -81,6 +70,7 @@ export default function App({ account, manifest }: AppProps) {
     );
   }, [towers]);
 
+  // Clear optimistic factories once Torii confirms
   useEffect(() => {
     if (!optimisticFactories.length) return;
     setOptimisticFactories((prev) => {
@@ -102,6 +92,8 @@ export default function App({ account, manifest }: AppProps) {
     });
   }, [factories]);
 
+  // Clear optimistic upgrades when Torii confirms level change
+  const prevFactoriesRef = useRef<unknown[]>([]);
   useEffect(() => {
     const prev = prevFactoriesRef.current as Array<{ factory_id: string | number; level: number }>;
     prevFactoriesRef.current = factories;
@@ -114,7 +106,6 @@ export default function App({ account, manifest }: AppProps) {
       const gain = Number(f.level) - Number(prevF.level);
       if (gain > 0) confirmedLevels[key] = gain;
     }
-
     if (!Object.keys(confirmedLevels).length) return;
 
     setUpgradeOptimistic((prev) => {
@@ -132,103 +123,61 @@ export default function App({ account, manifest }: AppProps) {
     });
   }, [factories]);
 
+  // Detect wave resolution: wave_number incremented in Torii while isResolving
   useEffect(() => {
-    setPostWaveTokens(null);
-    setPostWaveHealths({});
-    setPostWaveBaseHealth(null);
-  }, [gameState?.wave_number]);
+    if (!isResolving) return;
+    const pre = preWaveStateRef.current;
+    if (!pre || !gameState) return;
+    if (Number(gameState.wave_number) > Number(pre.wave_number)) {
+      const goldEarned = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
+      const baseDmg    = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
+      setWaveResult({
+        waveNumber:           Number(gameState.wave_number),
+        goldEarned,
+        baseDamage:           baseDmg,
+        baseHealthRemaining:  gameState.base_health ?? BASE_MAX_HP,
+      });
+      setIsResolving(false);
+    }
+  }, [gameState?.wave_number, isResolving]);
 
+  // Polling fallback: if subscription doesn't deliver the update, poll every 3s
+  useEffect(() => {
+    if (!isResolving) return;
+    const id = setInterval(() => {
+      console.log('[Poll] fetching game state while resolving…');
+      refreshGameState();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [isResolving, refreshGameState]);
+
+  // Auto-dismiss result card after 6 seconds
   useEffect(() => {
     if (!waveResult) return;
-    const t = setTimeout(() => setWaveResult(null), 5000);
+    const t = setTimeout(() => setWaveResult(null), 6000);
     return () => clearTimeout(t);
   }, [waveResult]);
 
-  const allTowers = [...towers, ...optimisticTowers].map((t) => {
-    const typed = t as { tower_id: string | number };
-    const postHealth = postWaveHealths[String(typed.tower_id)];
-    return postHealth ? { ...typed, ...postHealth } : typed;
-  });
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
+    };
+  }, []);
+
+  const allTowers = [...towers, ...optimisticTowers];
   const allFactories = [...factories, ...optimisticFactories].map((f) => {
     const typed = f as { factory_id: string | number; level: number };
     return { ...typed, level: Number(typed.level) + (upgradeOptimistic.counts[String(typed.factory_id)] ?? 0) };
   });
   const displayGold = (gameState?.gold ?? 0) - optimisticGoldSpent - upgradeOptimistic.gold;
-
-  const displayBaseHealth =
-    isWaveActive && waveSnapshot?.baseHealth !== undefined
-      ? waveSnapshot.baseHealth
-      : postWaveBaseHealth !== null
-        ? postWaveBaseHealth
-        : gameState?.base_health ?? BASE_MAX_HP;
-
-  const runLoop = useCallback((timestamp: number) => {
-    if (!simulatorRef.current) return;
-    const dt = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
-    lastTimeRef.current = timestamp;
-
-    const snapshot = simulatorRef.current.step(Math.min(dt, 0.05));
-    setWaveSnapshot(snapshot);
-
-    if (snapshot.done) {
-      endWave();
-      return;
-    }
-    rafRef.current = requestAnimationFrame(runLoop);
-  }, []);
-
-  async function endWave() {
-    const result: WaveResult | undefined = simulatorRef.current?.getResult();
-
-    if (simulatorRef.current) {
-      setPostWaveTokens({ ...simulatorRef.current.tokens });
-      setPostWaveBaseHealth(simulatorRef.current.baseHealth);
-      const healths: PostWaveHealths = {};
-      for (const t of simulatorRef.current.towers) {
-        healths[String(t.tower_id)] = { health: t.health, is_alive: t.is_alive };
-      }
-      setPostWaveHealths(healths);
-    }
-
-    if (result) {
-      setWaveResult({
-        waveNumber: simulatorRef.current?.waveNumber ?? 0,
-        goldEarned: result.goldEarned,
-        enemiesKilled: result.enemiesKilled ?? 0,
-        baseDamage: result.baseDamage ?? 0,
-        baseHealthRemaining: simulatorRef.current?.baseHealth ?? BASE_MAX_HP,
-      });
-    }
-
-    simulatorRef.current = null;
-    lastTimeRef.current = null;
-
-    if (result) {
-      const ids = result.towerDamages.map((d) => Number(d.tower_id));
-      const dmgs = result.towerDamages.map((d) => d.damage);
-      const { tokensConsumed, baseDamage } = result;
-      try {
-        await actions.commitWaveResult(
-          ids, dmgs, result.killGold,
-          tokensConsumed.input_tokens, tokensConsumed.image_tokens, tokensConsumed.code_tokens,
-          baseDamage ?? 0,
-        );
-      } catch (e) {
-        console.error('commitWaveResult failed:', e);
-      }
-    }
-    setIsWaveActive(false);
-    setWaveSnapshot(null);
-  }
+  const displayBaseHealth = gameState?.base_health ?? BASE_MAX_HP;
 
   function handleStartWave() {
-    if (!gameState || isWaveActive || countdown !== null) return;
+    if (!gameState || isResolving || countdown !== null) return;
     setWaveResult(null);
-
-    const waveNum = (gameState.wave_number ?? 0) + 1;
-    const snapTowers = [...allTowers];
-    const snapFactories = [...allFactories];
-    const snapGameState = { ...gameState, base_health: displayBaseHealth };
+    // Snapshot state before wave so we can compute the diff after
+    preWaveStateRef.current = { ...gameState, gold: displayGold };
 
     let remaining = 3;
     setCountdown(remaining);
@@ -240,22 +189,12 @@ export default function App({ account, manifest }: AppProps) {
         countdownTimerRef.current = setTimeout(advance, 800);
       } else {
         setCountdown(null);
-        simulatorRef.current = new WaveSimulator({
-          towers: snapTowers,
-          factories: snapFactories,
-          gameState: snapGameState,
-          waveNumber: waveNum,
-        });
-        setIsWaveActive(true);
-        lastTimeRef.current = null;
-        rafRef.current = requestAnimationFrame(runLoop);
-
+        setIsResolving(true);
+        // Fire the tx — contract resolves the wave atomically
         actions.startWave().catch((e: unknown) => {
           console.error('startWave failed:', e);
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
-          simulatorRef.current = null;
-          setIsWaveActive(false);
-          setWaveSnapshot(null);
+          setIsResolving(false);
+          preWaveStateRef.current = null;
         });
       }
     };
@@ -280,15 +219,8 @@ export default function App({ account, manifest }: AppProps) {
     });
   }
 
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
-    };
-  }, []);
-
   async function handleCellClick(col: number, row: number) {
-    if (!selectedBuild || !gameState || isWaveActive) return;
+    if (!selectedBuild || !gameState || isResolving || countdown !== null) return;
     if (col === BASE_X && row === BASE_Y) return;
 
     if (selectedBuild.type === 'tower') {
@@ -342,25 +274,22 @@ export default function App({ account, manifest }: AppProps) {
     );
   }
 
-  const displayTokens =
-    isWaveActive && waveSnapshot?.tokens ? waveSnapshot.tokens : postWaveTokens ?? {};
-
   const displayGameState = {
     ...gameState,
     gold: displayGold,
-    is_wave_active: isWaveActive || gameState.is_wave_active,
+    is_wave_active: isResolving,
     base_health: displayBaseHealth,
-    ...displayTokens,
   };
 
   const isCountingDown = countdown !== null;
+  const isBusy = isResolving || isCountingDown;
 
   return (
     <div className="app-root">
-      <ResourceBar gameState={displayGameState} waveSnapshot={waveSnapshot} />
+      <ResourceBar gameState={displayGameState} />
       <WavePanel
         gameState={displayGameState}
-        isWaveActive={isWaveActive}
+        isWaveActive={isBusy}
         isCountingDown={isCountingDown}
         onStartWave={handleStartWave}
       />
@@ -368,16 +297,14 @@ export default function App({ account, manifest }: AppProps) {
         <GameBoard
           towers={allTowers}
           factories={allFactories}
-          liveSnapshot={waveSnapshot}
           selectedBuild={selectedBuild}
           onCellClick={handleCellClick}
-          isWaveActive={isWaveActive}
+          isWaveActive={isBusy}
           baseHealth={displayBaseHealth}
         />
         <TowerStatus
           towers={allTowers}
           factories={allFactories}
-          liveSnapshot={waveSnapshot}
           gameState={displayGameState}
           onUpgrade={handleUpgrade}
         />
@@ -388,21 +315,27 @@ export default function App({ account, manifest }: AppProps) {
         {isMuted ? 'BGM OFF' : 'BGM ON'}
       </button>
 
-      {countdown !== null && (
+      {isCountingDown && (
         <div className="app-countdown-overlay">
           <div key={countdown} className="app-countdown-num">{countdown}</div>
         </div>
       )}
 
-      {waveResult && !isWaveActive && !isCountingDown && (
+      {isResolving && (
+        <div className="app-resolving-overlay">
+          <div className="app-resolving-card">
+            <div className="app-resolving-spinner" />
+            <div className="app-resolving-text">Wave resolving on-chain…</div>
+          </div>
+        </div>
+      )}
+
+      {waveResult && !isBusy && (
         <div className="app-result-overlay">
           <div className="app-result-card">
             <div className="app-result-title">Wave {waveResult.waveNumber} Complete!</div>
             <div className="app-result-row">
               Gold earned: <b style={{ color: '#FFD600' }}>+{waveResult.goldEarned}</b>
-            </div>
-            <div className="app-result-row">
-              Enemies defeated: <b style={{ color: '#4CAF50' }}>{waveResult.enemiesKilled}</b>
             </div>
             {waveResult.baseDamage > 0 && (
               <div className="app-result-row app-result-row--danger">

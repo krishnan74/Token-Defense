@@ -23,7 +23,6 @@ pub mod game_system {
                 player,
                 wave_number: 0,
                 gold: INIT_GOLD,
-                is_wave_active: false,
                 game_over: false,
                 victory: false,
                 next_tower_id: 0,

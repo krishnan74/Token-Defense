@@ -1,17 +1,14 @@
-import { BASE_MAX_HP, FACTORIES, getTokenTier, TOKEN_NAMES, TOWERS } from '../constants';
+import { BASE_MAX_HP, FACTORIES, TOWERS } from '../constants';
 import type { Factory, Tower } from '../dojo/models';
-import type { WaveSnapshot } from '../simulation/WaveSimulator';
 
 interface TowerStatusProps {
   towers: unknown[];
   factories: unknown[];
-  liveSnapshot: WaveSnapshot | null;
   gameState: { gold?: number; is_wave_active?: boolean; base_health?: number } | null;
   onUpgrade: (factoryId: number | string) => void;
 }
 
-export default function TowerStatus({ towers, factories, liveSnapshot, onUpgrade, gameState }: TowerStatusProps) {
-  const isWave = !!liveSnapshot;
+export default function TowerStatus({ towers, factories, onUpgrade, gameState }: TowerStatusProps) {
   const baseHealth = gameState?.base_health ?? BASE_MAX_HP;
   const basePct = BASE_MAX_HP > 0 ? baseHealth / BASE_MAX_HP : 0;
   const baseHpColor = basePct > 0.6 ? '#4CAF50' : basePct > 0.3 ? '#FFA726' : '#EF5350';
@@ -33,25 +30,16 @@ export default function TowerStatus({ towers, factories, liveSnapshot, onUpgrade
       <div style={styles.sectionTitle}>Towers</div>
       {towers.length === 0 && <div style={styles.empty}>None placed</div>}
       {(towers as Tower[]).map((t) => {
-        const live = liveSnapshot?.towers?.find((lt) => lt.tower_id === t.tower_id) ?? t;
-        const hp    = live.health ?? Number(t.health);
+        const hp    = Number(t.health);
         const maxHp = Number(t.max_health);
         const pct   = maxHp > 0 ? (hp / maxHp) * 100 : 0;
         const def   = TOWERS[Number(t.tower_type)];
-        const alive = (live as { is_alive?: boolean }).is_alive !== false;
-
-        const tier = isWave && liveSnapshot?.tokens && liveSnapshot.maxTokens && def
-          ? getTokenTier(
-              liveSnapshot.tokens[TOKEN_NAMES[def.tokenType] as keyof typeof liveSnapshot.tokens] ?? 0,
-              liveSnapshot.maxTokens[TOKEN_NAMES[def.tokenType] as keyof typeof liveSnapshot.maxTokens] ?? 0,
-            )
-          : null;
+        const alive = t.is_alive !== false;
 
         return (
           <div key={String(t.tower_id)} style={{ ...styles.card, opacity: alive ? 1 : 0.35 }}>
             <div style={styles.cardRow}>
               <span style={styles.cardName}>{def?.name} <span style={styles.idTag}>#{String(t.tower_id)}</span></span>
-              {tier && <span style={{ ...styles.tierBadge, background: tier.color }}>{tier.label}</span>}
             </div>
             <div style={styles.hpTrack}>
               <div style={{
@@ -61,13 +49,6 @@ export default function TowerStatus({ towers, factories, liveSnapshot, onUpgrade
               }} />
             </div>
             <div style={styles.sub}>{hp}/{maxHp} HP</div>
-            {tier && (
-              <div style={{ ...styles.sub, color: tier.color, marginTop: 2 }}>
-                {tier.label === 'Powered'
-                  ? `Full power · ${tier.cooldown}s`
-                  : `${Math.round(tier.dmgMultiplier * 100)}% dmg · ${tier.cooldown}s cd`}
-              </div>
-            )}
           </div>
         );
       })}
@@ -120,11 +101,6 @@ const styles = {
   cardRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   cardName: { color: '#424242', fontFamily: 'monospace', fontSize: 11 },
   idTag: { color: '#BDBDBD', fontSize: 10 },
-  tierBadge: {
-    fontSize: 9, fontWeight: 'bold', color: '#fff',
-    padding: '1px 5px', borderRadius: 3,
-    textTransform: 'uppercase' as const, letterSpacing: 0.3, flexShrink: 0,
-  },
   lvBadge: {
     fontSize: 9, fontWeight: 'bold', color: '#fff',
     padding: '1px 5px', borderRadius: 3, background: '#78909C',

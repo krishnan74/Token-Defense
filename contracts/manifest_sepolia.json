@@ -1,7 +1,7 @@
 {
   "world": {
     "class_hash": "0x719a487386c83521263c65f00336ef833ec738fc980fd755f9b641cf6b93f40",
-    "address": "0x1eaca139f880c110e55db572ffac49821f71624d7b31119c11693375088c966",
+    "address": "0x6e075b911d34e634b432de21fb25bf402d70e7cba4d182a41927a75adff4965",
     "seed": "dojo_intro",
     "name": "Dojo intro",
     "entrypoints": [
@@ -33,8 +33,8 @@
   },
   "contracts": [
     {
-      "address": "0x3fabdbe15ef6aa1021cf3d39c1cbd0666cd2f582392b37f81e5a1487a4a711a",
-      "class_hash": "0x84e2bede5180479650bbcaf90e78f3426842a041a1f18ab95fdfa1b3e1d9e7",
+      "address": "0x6dbe32636a5775508a95b6d1c2c47d0a02698be40fd58ba94cc9cb3e4cff377",
+      "class_hash": "0x37404d8ef3b7a0810226ca645d4b8e9a99f8210f42d8348b1a3eb209ac91f3e",
       "init_calldata": [],
       "tag": "di-building_system",
       "selector": "0x2aa8fcc21e02a2df7334b785cda63fde60c5636a35624b7825475d20f72e8fa",
@@ -46,8 +46,8 @@
       ]
     },
     {
-      "address": "0x53c91362568aef958d4b3886d1347ec7324b771448649a1ef4f8043dfbc5478",
-      "class_hash": "0x3aff3feff7d37316391f3dcbf95dd0361663730f611b2cfac2fcdfc94e0299d",
+      "address": "0x3e5dbf1cd120b8b13400e19822f17af486729d5992a874c93338114e29b37df",
+      "class_hash": "0x5d8763b70d6e00f247c717264be9fcc71e542f214813b85dd80057af56bc37b",
       "init_calldata": [],
       "tag": "di-game_system",
       "selector": "0x17ae3d72e533c01e49888b63e252bc36a8f2aa7d4c77ba0bd0d522164259673",
@@ -57,14 +57,13 @@
       ]
     },
     {
-      "address": "0x2055f74d5ac6f44302477a79cd5c1df861f14d373a88b0f2e00fe850b5ead9f",
-      "class_hash": "0x4f2cf4e24000593a73ef1f7b899376d55c9a021f15c9d8c8f27faa690e42ae0",
+      "address": "0x19769fe60733c1eea52f81ad367ad51b2329576032489f44f3d9972e82ee0bc",
+      "class_hash": "0x299e79b08cc406c2aca0b91f5dabbd577ae4ce1743865376d7fc7bd10fd0de7",
       "init_calldata": [],
       "tag": "di-wave_system",
       "selector": "0x2327027e692be18fb4f0748d22913dc03a9fd35a5712d78033d792e4db2327c",
       "systems": [
         "start_wave",
-        "commit_wave_result",
         "upgrade"
       ]
     }
@@ -131,11 +130,6 @@
           "key": false
         },
         {
-          "name": "is_wave_active",
-          "type": "core::bool",
-          "key": false
-        },
-        {
           "name": "game_over",
           "type": "core::bool",
           "key": false
@@ -176,7 +170,7 @@
           "key": false
         }
       ],
-      "class_hash": "0x76a6d3c0611083d335ceb447a7feb9a1c875a7e47ea33dcc6a681dcd4d1cb09",
+      "class_hash": "0x6d35f0d11e467f86bd2112ad60070f6c86b112c2d709b183d2ff125885cb77",
       "tag": "di-GameState",
       "selector": "0x520c18d6619456798fbcb4ba5476d0480a79a9c6ae1948f8a119bf0b4c10ac7"
     },
@@ -2088,10 +2082,6 @@
           "type": "core::integer::u32"
         },
         {
-          "name": "is_wave_active",
-          "type": "core::bool"
-        },
-        {
           "name": "game_over",
           "type": "core::bool"
         },
@@ -2136,10 +2126,6 @@
         {
           "name": "gold",
           "type": "core::integer::u32"
-        },
-        {
-          "name": "is_wave_active",
-          "type": "core::bool"
         },
         {
           "name": "game_over",
@@ -2374,42 +2360,6 @@
           "type": "function",
           "name": "start_wave",
           "inputs": [],
-          "outputs": [],
-          "state_mutability": "external"
-        },
-        {
-          "type": "function",
-          "name": "commit_wave_result",
-          "inputs": [
-            {
-              "name": "tower_ids",
-              "type": "core::array::Array::<core::integer::u32>"
-            },
-            {
-              "name": "tower_damages",
-              "type": "core::array::Array::<core::integer::u32>"
-            },
-            {
-              "name": "gold_from_kills",
-              "type": "core::integer::u32"
-            },
-            {
-              "name": "input_tokens_consumed",
-              "type": "core::integer::u32"
-            },
-            {
-              "name": "image_tokens_consumed",
-              "type": "core::integer::u32"
-            },
-            {
-              "name": "code_tokens_consumed",
-              "type": "core::integer::u32"
-            },
-            {
-              "name": "base_damage",
-              "type": "core::integer::u32"
-            }
-          ],
           "outputs": [],
           "state_mutability": "external"
         }

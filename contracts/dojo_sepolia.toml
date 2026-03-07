@@ -10,7 +10,7 @@ default = "di"
 rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
 account_address=  "0x0721834c557ce689176a2e66370585777ed82a916489dbe41d35acbe636cd55a"
 private_key = ""
-world_address = "0x1eaca139f880c110e55db572ffac49821f71624d7b31119c11693375088c966"
+world_address = "0x06e075b911d34e634b432de21fb25bf402d70e7cba4d182a41927a75adff4965"
 
 RUST_BACKTRACE=1
 
