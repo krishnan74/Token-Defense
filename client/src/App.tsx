@@ -5,14 +5,14 @@ import GameBoard from './components/GameBoard';
 import ResourceBar from './components/ResourceBar';
 import TowerStatus from './components/TowerStatus';
 import WavePanel from './components/WavePanel';
-import { BASE_MAX_HP, BASE_X, BASE_Y, FACTORIES, TOWERS } from './constants';
+import { BASE_MAX_HP, BASE_X, BASE_Y, ENEMIES, FACTORIES, GOLD_PER_WAVE, TOWERS, WAVE_COMPOSITIONS } from './constants';
 import type { ManifestContract } from './dojo/models';
 import { useActions } from './hooks/useActions';
+import { useAchievements } from './hooks/useAchievements';
 import { useBGM } from './hooks/useBGM';
 import { useGameState } from './hooks/useGameState';
 import type { WaveSnapshot } from './simulation/WaveSimulator';
 import { WaveReplay } from './simulation/WaveReplay';
-import { ENEMIES, GOLD_PER_WAVE, WAVE_COMPOSITIONS } from './constants';
 
 interface AppProps {
   account: AccountInterface | null;
@@ -34,18 +34,29 @@ interface WaveResultSummary {
   goldEarned: number;
   baseDamage: number;
   baseHealthRemaining: number;
+  killedTJ: boolean;
+  killedCO: boolean;
+  killedHS: boolean;
+}
+
+interface GameOver {
+  victory: boolean;
+  waveNumber: number;
+  baseHealthRemaining: number;
 }
 
 export default function App({ account, manifest }: AppProps) {
   const { gameState, towers, factories, refreshGameState } = useGameState(account);
   const actions = useActions(account, manifest);
   const { isMuted, toggleMute } = useBGM();
+  const { unlock, toasts: achievementToasts } = useAchievements();
 
 
   const [selectedBuild, setSelectedBuild] = useState<BuildSelection | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [waveResult, setWaveResult] = useState<WaveResultSummary | null>(null);
+  const [gameOver, setGameOver] = useState<GameOver | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
   const [liveSnapshot, setLiveSnapshot] = useState<WaveSnapshot | null>(null);
@@ -167,6 +178,9 @@ export default function App({ account, manifest }: AppProps) {
       goldEarned,
       baseDamage:          baseDamageTaken,
       baseHealthRemaining: gameState.base_health ?? BASE_MAX_HP,
+      killedTJ,
+      killedCO,
+      killedHS,
     };
 
     setIsResolving(false);
@@ -261,12 +275,32 @@ export default function App({ account, manifest }: AppProps) {
           rafRef.current = requestAnimationFrame(tick);
         } else {
           rafRef.current = null;
-          // Replay finished — now show the result card
           setLiveSnapshot(null);
           setIsReplaying(false);
-          if (pendingResultRef.current) {
-            setWaveResult(pendingResultRef.current);
-            pendingResultRef.current = null;
+          const result = pendingResultRef.current;
+          pendingResultRef.current = null;
+          if (result) {
+            // ── Achievements ──────────────────────────────────────────────
+            unlock('first_wave');
+            if (result.waveNumber >= 5)  unlock('wave_5');
+            if (result.waveNumber >= 10) unlock('wave_10');
+            if (result.baseDamage === 0) unlock('untouched');
+            const composition = WAVE_COMPOSITIONS[result.waveNumber] ?? [];
+            const hasGroups = (type: string) => composition.some((g) => g.type === type);
+            const allKilled =
+              (!hasGroups('TextJailbreak')   || result.killedTJ) &&
+              (!hasGroups('ContextOverflow')  || result.killedCO) &&
+              (!hasGroups('HalluSwarm')       || result.killedHS);
+            if (allKilled) unlock('clean_sweep');
+
+            // ── Victory / defeat ──────────────────────────────────────────
+            if (result.baseHealthRemaining <= 0) {
+              setGameOver({ victory: false, waveNumber: result.waveNumber, baseHealthRemaining: 0 });
+            } else if (result.waveNumber >= 10) {
+              setGameOver({ victory: true, waveNumber: result.waveNumber, baseHealthRemaining: result.baseHealthRemaining });
+            } else {
+              setWaveResult(result);
+            }
           }
         }
       }
@@ -281,6 +315,15 @@ export default function App({ account, manifest }: AppProps) {
     setIsReplaying(false);
     pendingResultRef.current = null;
   }
+
+  // Tower/factory placement achievements — checked whenever entities change
+  useEffect(() => {
+    if (allTowers.length >= 3) unlock('tower_3');
+    if (allFactories.length >= 2) unlock('factory_2');
+    const upgraded = (allFactories as Array<{ level: number }>).some((f) => Number(f.level) >= 2);
+    if (upgraded) unlock('upgraded');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTowers.length, allFactories.length]);
 
   function handleStartWave() {
     if (!gameState || isResolving || countdown !== null) return;
@@ -457,10 +500,69 @@ export default function App({ account, manifest }: AppProps) {
                 {waveResult.baseHealthRemaining}/{BASE_MAX_HP}
               </b>
             </div>
+            <KillBreakdown result={waveResult} />
             <button className="app-result-dismiss" onClick={() => setWaveResult(null)}>Dismiss</button>
           </div>
         </div>
       )}
+
+      {gameOver && (
+        <div className="app-gameover-overlay">
+          <div className={`app-gameover-card ${gameOver.victory ? 'app-gameover-card--victory' : 'app-gameover-card--defeat'}`}>
+            <div className="app-gameover-icon">{gameOver.victory ? '🏆' : '💀'}</div>
+            <div className="app-gameover-title">
+              {gameOver.victory ? 'Victory!' : 'Defeated'}
+            </div>
+            <div className="app-gameover-sub">
+              {gameOver.victory
+                ? `You survived all 10 waves! Base: ${gameOver.baseHealthRemaining}/${BASE_MAX_HP} HP`
+                : `Your base fell on wave ${gameOver.waveNumber}.`}
+            </div>
+            <button
+              className="app-gameover-btn"
+              onClick={() => { setGameOver(null); actions.newGame().catch(console.error); }}
+            >
+              Play Again
+            </button>
+          </div>
+        </div>
+      )}
+
+      {achievementToasts.map((ach) => (
+        <div key={ach.id} className="app-achievement-toast">
+          <div className="app-achievement-icon">★</div>
+          <div>
+            <div className="app-achievement-title">{ach.title}</div>
+            <div className="app-achievement-desc">{ach.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Kill breakdown sub-component ────────────────────────────────────────────
+
+function KillBreakdown({ result }: { result: WaveResultSummary }) {
+  const composition = WAVE_COMPOSITIONS[result.waveNumber] ?? [];
+  const rows: { label: string; killed: boolean }[] = [];
+  if (composition.some((g) => g.type === 'TextJailbreak'))
+    rows.push({ label: 'TextJailbreak',   killed: result.killedTJ });
+  if (composition.some((g) => g.type === 'ContextOverflow'))
+    rows.push({ label: 'ContextOverflow', killed: result.killedCO });
+  if (composition.some((g) => g.type === 'HalluSwarm'))
+    rows.push({ label: 'HalluSwarm',      killed: result.killedHS });
+  if (!rows.length) return null;
+  return (
+    <div style={{ marginTop: 8, borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 8 }}>
+      {rows.map(({ label, killed }) => (
+        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 3 }}>
+          <span style={{ fontFamily: 'monospace' }}>{label}</span>
+          <span style={{ color: killed ? '#4CAF50' : '#EF5350', fontWeight: 'bold' }}>
+            {killed ? 'Eliminated' : 'Survived'}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

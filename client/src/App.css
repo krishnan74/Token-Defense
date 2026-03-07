@@ -226,3 +226,120 @@
   font-size: 12px;
   font-weight: bold;
 }
+
+/* ── Victory / Defeat overlay ───────────────────────────────────────────── */
+.app-gameover-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 300;
+}
+
+.app-gameover-card {
+  text-align: center;
+  border-radius: 16px;
+  padding: 36px 48px;
+  min-width: 280px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+  font-family: monospace;
+  animation: gameover-pop 0.35s ease-out;
+}
+
+@keyframes gameover-pop {
+  from { transform: scale(0.82); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.app-gameover-card--victory {
+  background: linear-gradient(160deg, #1B5E20, #2E7D32);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.app-gameover-card--defeat {
+  background: linear-gradient(160deg, #1a0a0a, #3c1010);
+  border: 2px solid rgba(239, 83, 80, 0.4);
+  color: #fff;
+}
+
+.app-gameover-icon {
+  font-size: 52px;
+  margin-bottom: 12px;
+}
+
+.app-gameover-title {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+
+.app-gameover-sub {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.app-gameover-btn {
+  padding: 10px 32px;
+  font-size: 14px;
+  font-family: monospace;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.app-gameover-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Achievement toasts ─────────────────────────────────────────────────── */
+.app-achievement-toast {
+  position: fixed;
+  bottom: 48px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #212121;
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 16px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  font-family: monospace;
+  border-left: 3px solid #FFD600;
+  z-index: 400;
+  animation: toast-slide 0.3s ease-out;
+  max-width: 260px;
+}
+
+@keyframes toast-slide {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.app-achievement-icon {
+  font-size: 20px;
+  color: #FFD600;
+  flex-shrink: 0;
+}
+
+.app-achievement-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #FFD600;
+}
+
+.app-achievement-desc {
+  font-size: 10px;
+  color: #aaa;
+  margin-top: 2px;
+}
