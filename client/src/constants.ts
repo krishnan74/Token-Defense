@@ -107,3 +107,48 @@ export const GOLD_PER_WAVE = (wave: number): number => 50 + wave * 10;
 
 export const TOWER_RANGE = 3;
 export const TICKS_PER_SEC = 60;
+
+// ── Path tiles ─────────────────────────────────────────────────────────────
+/** Returns true if the cell is part of the enemy walk path (cannot build here). */
+export function isPathTile(col: number, row: number): boolean {
+  if (row === 1 && col >= 9 && col <= GRID_W - 1) return true;
+  if (col === 9 && row >= 1 && row <= 3) return true;
+  if (row === 3 && col >= 5 && col <= 9) return true;
+  if (col === 5 && row >= 3 && row <= 6) return true;
+  if (row === 6 && col >= 0 && col <= 5) return true;
+  return false;
+}
+
+// ── Conveyor helpers ───────────────────────────────────────────────────────
+export const CONVEYOR_COLORS: Record<number, string> = {
+  0: '#63B3ED',
+  1: '#68D391',
+  2: '#FC8181',
+};
+
+export interface ConveyorTile {
+  x: number;
+  y: number;
+  dir: 'H' | 'V' | 'C';
+}
+
+/**
+ * Compute the L-shaped conveyor path from factory (fx,fy) to tower (tx,ty).
+ * Goes horizontal first, then vertical.  Excludes factory and tower cells.
+ */
+export function computeConveyorTiles(
+  fx: number, fy: number,
+  tx: number, ty: number,
+): ConveyorTile[] {
+  const tiles: ConveyorTile[] = [];
+  const xs = Math.sign(tx - fx);
+  const ys = Math.sign(ty - fy);
+  if (xs !== 0) {
+    for (let x = fx + xs; x !== tx; x += xs) tiles.push({ x, y: fy, dir: 'H' });
+    if (ys !== 0) tiles.push({ x: tx, y: fy, dir: 'C' });
+  }
+  if (ys !== 0) {
+    for (let y = fy + ys; y !== ty + ys; y += ys) tiles.push({ x: tx, y, dir: 'V' });
+  }
+  return tiles.filter((t) => !(t.x === fx && t.y === fy) && !(t.x === tx && t.y === ty));
+}

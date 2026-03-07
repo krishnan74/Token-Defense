@@ -7,8 +7,11 @@ import TowerStatus from './components/TowerStatus';
 import WavePanel from './components/WavePanel';
 import {
   BASE_MAX_HP, BASE_X, BASE_Y,
-  ENEMIES, FACTORIES, GOLD_PER_WAVE, TOWERS, WAVE_COMPOSITIONS,
+  CONVEYOR_COLORS, ENEMIES, FACTORIES, GOLD_PER_WAVE,
+  TOWERS, WAVE_COMPOSITIONS,
+  computeConveyorTiles, isPathTile,
 } from './constants';
+import type { ConveyorTile } from './constants';
 import type { ManifestContract } from './dojo/models';
 import { useActions } from './hooks/useActions';
 import { useAchievements } from './hooks/useAchievements';
@@ -56,6 +59,18 @@ interface GameStats {
   wavesCompleted: number;
 }
 
+export interface Conveyor {
+  id: string;
+  factoryId: string | number;
+  towerId:   string | number;
+  fx: number; fy: number;
+  tx: number; ty: number;
+  tiles: ConveyorTile[];
+  revealedCount: number;
+  color: string;
+  tokenCount: number;
+}
+
 const EMPTY_STATS: GameStats = { totalKills: 0, totalGoldEarned: 0, totalBaseDamage: 0, wavesCompleted: 0 };
 
 export default function App({ account, manifest }: AppProps) {
@@ -73,6 +88,7 @@ export default function App({ account, manifest }: AppProps) {
   const [replaySpeed, setReplaySpeed] = useState(1);
   const replaySpeedRef = useRef(1);
   const [isStartingGame, setIsStartingGame] = useState(false);
+  const [conveyors, setConveyors] = useState<Conveyor[]>([]);
 
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -420,6 +436,7 @@ export default function App({ account, manifest }: AppProps) {
   async function handleCellClick(col: number, row: number) {
     if (!selectedBuild || !gameState || isResolving || countdown !== null) return;
     if (col === BASE_X && row === BASE_Y) return;
+    if (isPathTile(col, row)) return; // cannot build on enemy path
 
     if (selectedBuild.type === 'tower') {
       const def = TOWERS[selectedBuild.id];
@@ -445,12 +462,41 @@ export default function App({ account, manifest }: AppProps) {
         { factory_id: tempId, factory_type: selectedBuild.id, x: col, y: row, level: 1, is_active: true },
       ]);
       setOptimisticGoldSpent((prev) => prev + def.cost);
+
+      // Create conveyor to nearest alive tower
+      const tList = allTowers as Array<{ tower_id: string | number; x: number; y: number; is_alive?: boolean }>;
+      const nearestT = tList
+        .filter((t) => t.is_alive !== false)
+        .reduce<{ tower_id: string | number; x: number; y: number } | null>((best, t) => {
+          const dx = Number(t.x) - col, dy = Number(t.y) - row;
+          if (!best) return t;
+          const bx = Number(best.x) - col, by = Number(best.y) - row;
+          return dx * dx + dy * dy < bx * bx + by * by ? t : best;
+        }, null);
+      if (nearestT) {
+        const tx = Number(nearestT.x), ty = Number(nearestT.y);
+        const convTiles = computeConveyorTiles(col, row, tx, ty);
+        const convId = `conv-${tempId}`;
+        setConveyors((prev) => [...prev, {
+          id: convId, factoryId: tempId, towerId: nearestT.tower_id,
+          fx: col, fy: row, tx, ty, tiles: convTiles, revealedCount: 0,
+          color: CONVEYOR_COLORS[selectedBuild.id] ?? '#888',
+          tokenCount: FACTORIES[selectedBuild.id]?.baseOutput ?? 0,
+        }]);
+        convTiles.forEach((_, i) => {
+          setTimeout(() => {
+            setConveyors((prev) => prev.map((c) => c.id === convId ? { ...c, revealedCount: i + 1 } : c));
+          }, i * 150 + 100);
+        });
+      }
+
       actions.placeFactory(selectedBuild.id, col, row).catch((e: unknown) => {
         console.error(e);
         setOptimisticFactories((prev) =>
           (prev as Array<{ factory_id: string }>).filter((f) => f.factory_id !== tempId),
         );
         setOptimisticGoldSpent((prev) => prev - def.cost);
+        setConveyors((prev) => prev.filter((c) => c.factoryId !== tempId));
       });
     }
   }
@@ -467,6 +513,7 @@ export default function App({ account, manifest }: AppProps) {
         onAction={() => {
           sfx.playClick();
           setIsStartingGame(true);
+          setConveyors([]);
           actions.newGame().catch((e) => {
             console.error(e);
             setIsStartingGame(false);
@@ -504,6 +551,7 @@ export default function App({ account, manifest }: AppProps) {
           onCellClick={handleCellClick}
           isWaveActive={isBusy}
           baseHealth={displayBaseHealth}
+          conveyors={conveyors}
         />
         <TowerStatus
           towers={allTowers}
@@ -593,6 +641,7 @@ export default function App({ account, manifest }: AppProps) {
                 sfx.playClick();
                 setGameOver(null);
                 setGameStats(EMPTY_STATS);
+                setConveyors([]);
                 actions.newGame().catch(console.error);
               }}
             >

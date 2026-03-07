@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  BASE_MAX_HP, BASE_X, BASE_Y,
+  BASE_MAX_HP, BASE_X, BASE_Y, CONVEYOR_COLORS, FACTORIES,
   getTokenTier, GRID_H, GRID_W,
   PATH_WAYPOINTS, TOKEN_NAMES, TOWER_RANGE, TOWERS,
 } from '../constants';
-import type { BuildSelection } from '../App';
+import type { BuildSelection, Conveyor } from '../App';
 import type { LiveEnemy, LiveTower, WaveSnapshot } from '../simulation/WaveSimulator';
 
 const CELL = 64;
@@ -34,6 +34,14 @@ const KEYFRAMES = `
     60%       { transform: translate(-3px, 3px); }
     80%       { transform: translate(3px, -1px); }
   }
+  @keyframes marchingAnts {
+    to { stroke-dashoffset: -24; }
+  }
+  @keyframes conveyorPop {
+    0%   { transform: scale(0.3); opacity: 0; }
+    60%  { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
 `;
 
 // ── Path detection ─────────────────────────────────────────────────────────
@@ -52,6 +60,30 @@ function getTileColor(col: number, row: number): string {
     return (col + row) % 2 === 0 ? '#C49A5A' : '#B88A48';
   }
   return (col + row) % 2 === 0 ? '#5A9E2F' : '#4D8A26';
+}
+
+// ── Conveyor helpers ────────────────────────────────────────────────────────
+function findNearestTower(
+  col: number, row: number, towerList: unknown[],
+): { tower_id: string | number; x: number; y: number } | null {
+  let best: { tower_id: string | number; x: number; y: number } | null = null;
+  let bestDist = Infinity;
+  for (const t of towerList as Array<{ tower_id: string | number; x: number; y: number; is_alive?: boolean }>) {
+    if (t.is_alive === false) continue;
+    const dx = Number(t.x) - col, dy = Number(t.y) - row;
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) { bestDist = d; best = t; }
+  }
+  return best;
+}
+
+function conveyorToSvgPath(conv: Conveyor, cell: number): string {
+  const pts = [
+    `${conv.fx * cell + cell / 2},${conv.fy * cell + cell / 2}`,
+    ...conv.tiles.map((t) => `${t.x * cell + cell / 2},${t.y * cell + cell / 2}`),
+    `${conv.tx * cell + cell / 2},${conv.ty * cell + cell / 2}`,
+  ];
+  return `M${pts[0]} ${pts.slice(1).map((p) => `L${p}`).join(' ')}`;
 }
 
 function isCellOccupied(col: number, row: number, towers: unknown[], factories: unknown[]): boolean {
@@ -283,10 +315,11 @@ interface GameBoardProps {
   onCellClick: (col: number, row: number) => void;
   isWaveActive: boolean;
   baseHealth: number;
+  conveyors: Conveyor[];
 }
 
 export default function GameBoard({
-  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth,
+  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth, conveyors,
 }: GameBoardProps) {
   const [hoveredCell, setHoveredCell] = useState<{ col: number; row: number } | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -321,7 +354,8 @@ export default function GameBoard({
 
   const hoveredOccupied = hoveredCell
     && isCellOccupied(hoveredCell.col, hoveredCell.row, liveTowers, factories);
-  const canPlace = !!hoveredCell && !!selectedBuild && !isWaveActive && !hoveredOccupied;
+  const canPlace = !!hoveredCell && !!selectedBuild && !isWaveActive && !hoveredOccupied
+    && !isPathTile(hoveredCell.col, hoveredCell.row);
 
   // Auto-fit: scale the board to fill the container exactly — no manual zoom
   const BOARD_W = GRID_W * CELL;
@@ -425,7 +459,89 @@ export default function GameBoard({
                 </g>
               );
             })}
+
+            {/* Marching-ants link to nearest tower when hovering factory placement */}
+            {hoveredCell && selectedBuild?.type === 'factory' && !isWaveActive && (() => {
+              const nearest = findNearestTower(hoveredCell.col, hoveredCell.row, towers);
+              if (!nearest) return null;
+              const convColor = CONVEYOR_COLORS[selectedBuild.id] ?? '#888';
+              const sx = (hoveredCell.col + 0.5) * CELL, sy = (hoveredCell.row + 0.5) * CELL;
+              const ex = (Number(nearest.x) + 0.5) * CELL, ey = (Number(nearest.y) + 0.5) * CELL;
+              const tokenProd = FACTORIES[selectedBuild.id]?.baseOutput ?? 0;
+              return (
+                <g key="hover-link">
+                  <line
+                    x1={sx} y1={sy} x2={ex} y2={ey}
+                    stroke={convColor} strokeWidth={3} strokeDasharray="8,6" opacity={0.85}
+                    style={{ animation: 'marchingAnts 0.5s linear infinite' }}
+                  />
+                  <rect
+                    x={ex - 36} y={ey - CELL * 0.85}
+                    width={72} height={20}
+                    fill="rgba(0,0,0,0.7)" rx={0}
+                  />
+                  <text
+                    x={ex} y={ey - CELL * 0.85 + 14}
+                    textAnchor="middle"
+                    fill={convColor}
+                    fontFamily="'VT323', monospace" fontSize={15}
+                  >+{tokenProd}/wave</text>
+                </g>
+              );
+            })()}
+
+            {/* Token particles traveling along conveyors during wave */}
+            {isWaveActive && conveyors
+              .filter((c) => c.revealedCount >= c.tiles.length)
+              .map((conv) => {
+                const pathD = conveyorToSvgPath(conv, CELL);
+                return (
+                  <g key={`tkp-${conv.id}`}>
+                    {([0, 0.38, 0.72] as number[]).map((off, i) => (
+                      <circle key={i} r={4} fill={conv.color} opacity={0.9}>
+                        <animateMotion
+                          dur="2.2s"
+                          begin={`${-off * 2.2}s`}
+                          repeatCount="indefinite"
+                          path={pathD}
+                        />
+                      </circle>
+                    ))}
+                  </g>
+                );
+              })}
           </svg>
+
+          {/* ── Conveyor tiles ── */}
+          {conveyors.flatMap((conv) =>
+            conv.tiles.slice(0, conv.revealedCount).map((tile, idx) => {
+              const isNew = idx === conv.revealedCount - 1;
+              const isV = tile.dir === 'V';
+              const isC = tile.dir === 'C';
+              // H: wide strip | V: tall strip | C: corner square bridging both
+              const w = isC ? CELL * 0.4 : isV ? CELL * 0.28 : CELL * 0.85;
+              const h = isC ? CELL * 0.4 : isV ? CELL * 0.85 : CELL * 0.28;
+              return (
+                <div
+                  key={`ct-${conv.id}-${idx}`}
+                  style={{
+                    position: 'absolute',
+                    left: tile.x * CELL + (CELL - w) / 2,
+                    top:  tile.y * CELL + (CELL - h) / 2,
+                    width: w, height: h,
+                    background: conv.color,
+                    opacity: 0.65,
+                    border: `1px solid ${conv.color}`,
+                    boxShadow: `1px 1px 0 rgba(0,0,0,0.45)`,
+                    zIndex: 1, pointerEvents: 'none',
+                    transformOrigin: 'center',
+                    animation: isNew ? 'conveyorPop 0.35s steps(4) forwards' : 'none',
+                    imageRendering: 'pixelated',
+                  }}
+                />
+              );
+            })
+          )}
 
           {/* ── Base ── */}
           <div style={{ position: 'absolute', left: BASE_X * CELL + 2, top: BASE_Y * CELL + 2, zIndex: 3, pointerEvents: 'none' }}>
