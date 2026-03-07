@@ -7,24 +7,36 @@ interface BuildMenuProps {
   gameState: { gold: number; is_wave_active?: boolean } | null;
 }
 
-const TOWER_ACCENT: Record<number, string>   = { 0: '#1565C0', 1: '#6A1B9A', 2: '#E65100' };
-const FACTORY_ACCENT: Record<number, string> = { 0: '#0277BD', 1: '#2E7D32', 2: '#BF360C' };
-const TOKEN_LABEL: Record<string, string>    = { input_tokens: 'Input', image_tokens: 'Image', code_tokens: 'Code' };
+const TOWER_COLORS: Record<number, { bg: string; border: string; active: string }> = {
+  0: { bg: '#1A3D70', border: '#2B6CB0', active: '#3A8AE0' },
+  1: { bg: '#4A1A7A', border: '#7B3FAD', active: '#9B5FCF' },
+  2: { bg: '#7A3400', border: '#C05800', active: '#E07820' },
+};
+
+const FACTORY_COLORS: Record<number, { bg: string; border: string; active: string }> = {
+  0: { bg: '#0D3A6A', border: '#1A6FAF', active: '#2A8FCF' },
+  1: { bg: '#144014', border: '#2A7A2A', active: '#3A9A3A' },
+  2: { bg: '#6A1D0A', border: '#AF3A1A', active: '#CF5A3A' },
+};
+
+const TOKEN_LABEL: Record<string, string> = {
+  input_tokens: 'Input', image_tokens: 'Image', code_tokens: 'Code',
+};
 
 export default function BuildMenu({ selected, onSelect, gameState }: BuildMenuProps) {
-  const gold = gameState?.gold ?? 0;
-  const disabled = gameState?.is_wave_active;
+  const gold     = gameState?.gold ?? 0;
+  const disabled = !!gameState?.is_wave_active;
 
   const isActive = (type: 'tower' | 'factory', id: number) =>
     selected?.type === type && selected?.id === id;
 
   return (
     <div style={styles.menu}>
-      <span style={styles.sectionLabel}>Towers</span>
+      <span style={styles.sectionLabel}>TOWERS</span>
       {Object.entries(TOWERS).map(([id, t]) => {
-        const numId = Number(id);
+        const numId  = Number(id);
         const active = isActive('tower', numId);
-        const accent = TOWER_ACCENT[numId];
+        const cfg    = TOWER_COLORS[numId] ?? TOWER_COLORS[0];
         return (
           <button
             key={`tw-${id}`}
@@ -32,25 +44,24 @@ export default function BuildMenu({ selected, onSelect, gameState }: BuildMenuPr
             onClick={() => onSelect(active ? null : { type: 'tower', id: numId })}
             style={{
               ...styles.card,
-              borderColor: active ? accent : 'rgba(0,0,0,0.12)',
-              background: active ? `${accent}18` : '#fff',
-              outline: active ? `2px solid ${accent}` : 'none',
-              outlineOffset: -1,
+              background: active ? cfg.active : cfg.bg,
+              border: `3px solid ${active ? '#FFD700' : cfg.border}`,
+              boxShadow: active ? '0 0 0 2px #FFD700, 3px 3px 0 #0A0500' : '3px 3px 0 #0A0500',
             }}
           >
-            <span style={{ ...styles.cardName, color: accent }}>{t.name}</span>
-            <span style={styles.cardStat}>Free · {TOKEN_LABEL[TOKEN_NAMES[t.tokenType]]} token</span>
+            <span style={{ ...styles.cardName, color: active ? '#FFD700' : '#F5E6C8' }}>{t.name}</span>
+            <span style={styles.cardStat}>Free · {TOKEN_LABEL[TOKEN_NAMES[t.tokenType]]}</span>
           </button>
         );
       })}
 
       <div style={styles.divider} />
 
-      <span style={styles.sectionLabel}>Factories</span>
+      <span style={styles.sectionLabel}>FACTORIES</span>
       {Object.entries(FACTORIES).map(([id, f]) => {
-        const numId = Number(id);
-        const active = isActive('factory', numId);
-        const accent = FACTORY_ACCENT[numId];
+        const numId    = Number(id);
+        const active   = isActive('factory', numId);
+        const cfg      = FACTORY_COLORS[numId] ?? FACTORY_COLORS[0];
         const canAfford = gold >= f.cost;
         return (
           <button
@@ -59,21 +70,20 @@ export default function BuildMenu({ selected, onSelect, gameState }: BuildMenuPr
             onClick={() => onSelect(active ? null : { type: 'factory', id: numId })}
             style={{
               ...styles.card,
-              borderColor: active ? accent : 'rgba(0,0,0,0.12)',
-              background: active ? `${accent}18` : '#fff',
-              outline: active ? `2px solid ${accent}` : 'none',
-              outlineOffset: -1,
+              background: active ? cfg.active : cfg.bg,
+              border: `3px solid ${active ? '#FFD700' : cfg.border}`,
+              boxShadow: active ? '0 0 0 2px #FFD700, 3px 3px 0 #0A0500' : '3px 3px 0 #0A0500',
               opacity: canAfford ? 1 : 0.4,
             }}
           >
-            <span style={{ ...styles.cardName, color: accent }}>{f.name}</span>
+            <span style={{ ...styles.cardName, color: active ? '#FFD700' : '#F5E6C8' }}>{f.name}</span>
             <span style={styles.cardStat}>{f.cost}g · {f.baseOutput} tok/wave</span>
           </button>
         );
       })}
 
       <div style={styles.divider} />
-      <button style={styles.clearBtn} onClick={() => onSelect(null)}>✕ Clear</button>
+      <button style={styles.clearBtn} onClick={() => onSelect(null)}>✕ CLEAR</button>
     </div>
   );
 }
@@ -82,31 +92,32 @@ const styles = {
   menu: {
     display: 'flex', alignItems: 'center', gap: 6,
     padding: '8px 14px',
-    background: '#F1F8E9',
-    borderTop: '1px solid rgba(76,175,80,0.25)',
+    background: '#2C1507',
+    borderTop: '3px solid #4A2510',
     flexWrap: 'wrap' as const, flexShrink: 0,
   },
   sectionLabel: {
-    fontSize: 10, color: '#888', textTransform: 'uppercase' as const,
-    letterSpacing: 0.8, marginRight: 2,
+    fontFamily: "'VT323', monospace",
+    fontSize: 14, color: '#6B3A1E', letterSpacing: 1,
   },
   card: {
-    display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start' as const,
-    padding: '5px 10px',
-    border: '1.5px solid rgba(0,0,0,0.12)',
-    borderRadius: 6, cursor: 'pointer',
-    fontFamily: 'monospace',
-    transition: 'background 0.15s, border-color 0.15s',
-    background: '#fff',
-  },
-  cardName: { fontSize: 12, fontWeight: 'bold', lineHeight: 1.4 },
-  cardStat: { fontSize: 10, color: '#888', lineHeight: 1.3 },
-  divider: { width: 1, height: 32, background: 'rgba(0,0,0,0.1)', margin: '0 4px' },
-  clearBtn: {
+    display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start',
     padding: '5px 12px',
-    background: 'transparent', color: '#9E9E9E',
-    border: '1.5px solid rgba(0,0,0,0.1)',
-    borderRadius: 6, cursor: 'pointer',
-    fontFamily: 'monospace', fontSize: 11,
+    borderRadius: 0,
+    cursor: 'pointer',
+    fontFamily: "'VT323', monospace",
+    transition: 'background 0.1s',
+    minWidth: 72,
+  },
+  cardName: { fontSize: 18, lineHeight: 1.2 },
+  cardStat: { fontSize: 12, color: '#A08060', lineHeight: 1.2 },
+  divider: { width: 2, height: 36, background: '#4A2510', margin: '0 4px' },
+  clearBtn: {
+    padding: '5px 14px',
+    background: 'transparent', color: '#6B3A1E',
+    border: '2px solid #4A2510',
+    borderRadius: 0, cursor: 'pointer',
+    fontFamily: "'VT323', monospace", fontSize: 16,
+    transition: 'color 0.1s',
   },
 };
