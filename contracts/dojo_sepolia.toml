@@ -1,0 +1,18 @@
+[world]
+name = "Dojo intro"
+description = "A simple intro to Dojo."
+seed = "dojo_intro"
+
+[namespace]
+default = "di"
+
+[env]
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
+account_address=  "0x0721834c557ce689176a2e66370585777ed82a916489dbe41d35acbe636cd55a"
+private_key = ""
+world_address = "0x1eaca139f880c110e55db572ffac49821f71624d7b31119c11693375088c966"
+
+RUST_BACKTRACE=1
+
+[writers]
+"di" = ["di-game_system", "di-building_system", "di-wave_system"]
