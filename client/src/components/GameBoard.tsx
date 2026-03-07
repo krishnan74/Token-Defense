@@ -4,10 +4,11 @@ import gptIdleSrc    from '../../assets/images/gpt_tower_idle.png';
 import gptCoolingSrc from '../../assets/images/gpt_tower_cooling.png';
 import {
   BASE_MAX_HP, BASE_X, BASE_Y,
-  GRID_H, GRID_W,
-  PATH_WAYPOINTS,
+  getTokenTier, GRID_H, GRID_W,
+  PATH_WAYPOINTS, TOKEN_NAMES, TOWERS,
 } from '../constants';
 import type { BuildSelection } from '../App';
+import type { LiveEnemy, LiveTower, WaveSnapshot } from '../simulation/WaveSimulator';
 
 const CELL_SIZE = 64;
 const GPT_DISPLAY_W = 64;
@@ -230,6 +231,36 @@ function BaseSprite({ health, maxHp, shake }: { health: number; maxHp: number; s
   );
 }
 
+const ENEMY_CFG: Record<string, { fill: string; bg: string; sz: number; anim: string; label: string; radius: string }> = {
+  TextJailbreak:   { fill: '#E53935', bg: '#EF9A9A', sz: 36, anim: 'enemyBob 1.4s ease-in-out infinite',     label: '?', radius: '60% 40% 55% 45% / 45% 55% 45% 55%' },
+  ContextOverflow: { fill: '#4E342E', bg: '#A1887F', sz: 46, anim: 'enemyBob 2.2s ease-in-out infinite',     label: '∞', radius: '30% 70% 60% 40% / 50% 40% 60% 50%' },
+  HalluSwarm:      { fill: '#6A1B9A', bg: '#CE93D8', sz: 20, anim: 'swarmFlicker 0.9s ease-in-out infinite', label: '~', radius: '50%' },
+};
+
+function EnemySprite({ enemy }: { enemy: LiveEnemy }) {
+  const cfg = ENEMY_CFG[enemy.type] ?? ENEMY_CFG.TextJailbreak;
+  const hpPct = enemy.maxHp > 0 ? enemy.hp / enemy.maxHp : 0;
+  return (
+    <div style={{ position: 'relative', width: cfg.sz, height: cfg.sz }}>
+      <div style={{
+        width: cfg.sz, height: cfg.sz,
+        background: `radial-gradient(circle at 32% 30%, ${cfg.bg}, ${cfg.fill})`,
+        borderRadius: cfg.radius, border: `1.5px solid ${cfg.fill}cc`,
+        boxShadow: `0 2px 8px ${cfg.fill}66`,
+        animation: cfg.anim,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        filter: enemy.hitFlash > 0 ? 'brightness(3) saturate(0.3)' : 'none',
+        transition: 'filter 0.06s',
+      }}>
+        <span style={{ fontSize: cfg.sz < 24 ? 8 : 13, color: '#fff', fontWeight: 'bold', opacity: 0.85 }}>{cfg.label}</span>
+      </div>
+      <div style={{ position: 'absolute', bottom: -7, left: '50%', transform: 'translateX(-50%)', width: cfg.sz + 6, height: 4, background: 'rgba(0,0,0,0.22)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: `${hpPct * 100}%`, height: '100%', borderRadius: 2, background: hpPct > 0.5 ? '#66BB6A' : hpPct > 0.25 ? '#FFA726' : '#EF5350', transition: 'width 0.08s' }} />
+      </div>
+    </div>
+  );
+}
+
 function GhostPreview({ selectedBuild, valid }: { selectedBuild: BuildSelection; valid: boolean }) {
   const borderStyle = `2px dashed ${valid ? '#4CAF50' : '#EF5350'}`;
   const tint = valid ? 'rgba(76,175,80,0.15)' : 'rgba(239,83,80,0.15)';
@@ -257,6 +288,7 @@ const PATH_POINTS_STR = VISIBLE_PATH.map((p) => `${p.x},${p.y}`).join(' ');
 interface GameBoardProps {
   towers: unknown[];
   factories: unknown[];
+  liveSnapshot: WaveSnapshot | null;
   selectedBuild: BuildSelection | null;
   onCellClick: (col: number, row: number) => void;
   isWaveActive: boolean;
@@ -264,12 +296,14 @@ interface GameBoardProps {
 }
 
 export default function GameBoard({
-  towers, factories, selectedBuild, onCellClick, isWaveActive, baseHealth,
+  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth,
 }: GameBoardProps) {
   const [hoveredCell, setHoveredCell] = useState<{ col: number; row: number } | null>(null);
   const [zoom, setZoom] = useState(1.0);
   const zoomRef = useRef(1.0);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [shakeActive, setShakeActive] = useState(false);
+  const lastShakePulse = useRef(0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -283,8 +317,22 @@ export default function GameBoard({
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
+  const enemies    = liveSnapshot?.enemies?.filter((e) => e.alive) ?? [];
+  const liveTowers = (liveSnapshot?.towers ?? towers) as LiveTower[];
+  const displayBaseHealth = liveSnapshot?.baseHealth ?? baseHealth ?? BASE_MAX_HP;
+
+  useEffect(() => {
+    const pulse = liveSnapshot?.screenShakePulse ?? 0;
+    if (pulse > lastShakePulse.current) {
+      lastShakePulse.current = pulse;
+      setShakeActive(true);
+      const t = setTimeout(() => setShakeActive(false), 350);
+      return () => clearTimeout(t);
+    }
+  }, [liveSnapshot]);
+
   const hoveredOccupied =
-    hoveredCell && isCellOccupied(hoveredCell.col, hoveredCell.row, towers, factories);
+    hoveredCell && isCellOccupied(hoveredCell.col, hoveredCell.row, liveTowers, factories);
   const canPlace = !!hoveredCell && !!selectedBuild && !isWaveActive && !hoveredOccupied;
 
   return (
@@ -329,6 +377,18 @@ export default function GameBoard({
           <svg style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', zIndex: 1, overflow: 'visible' }} width={GRID_W * CELL_SIZE} height={GRID_H * CELL_SIZE}>
             <polyline points={PATH_POINTS_STR} fill="none" stroke="rgba(239,83,80,0.12)" strokeWidth={CELL_SIZE * 0.72} strokeLinecap="round" strokeLinejoin="round" />
             <polyline points={PATH_POINTS_STR} fill="none" stroke="rgba(239,83,80,0.38)" strokeWidth={2} strokeDasharray="10,7" strokeLinecap="round" strokeLinejoin="round" />
+            {liveSnapshot?.projectiles?.map((p) => {
+              const x1 = p.fromX * CELL_SIZE, y1 = p.fromY * CELL_SIZE;
+              const x2 = p.toX  * CELL_SIZE, y2 = p.toY  * CELL_SIZE;
+              const cx = x1 + (x2 - x1) * p.progress;
+              const cy = y1 + (y2 - y1) * p.progress;
+              return (
+                <g key={p.id}>
+                  <line x1={x1 + (cx - x1) * 0.4} y1={y1 + (cy - y1) * 0.4} x2={cx} y2={cy} stroke={p.color} strokeWidth={2} opacity={0.35} strokeLinecap="round" />
+                  <circle cx={cx} cy={cy} r={4} fill={p.color} opacity={0.92} />
+                </g>
+              );
+            })}
           </svg>
 
           {[1, 2, 3, 4, 5, 6].map((row) => (
@@ -336,7 +396,7 @@ export default function GameBoard({
           ))}
 
           <div style={{ position: 'absolute', left: BASE_X * CELL_SIZE + 2, top: BASE_Y * CELL_SIZE + 2, zIndex: 3, pointerEvents: 'none' }}>
-            <BaseSprite health={baseHealth ?? BASE_MAX_HP} maxHp={BASE_MAX_HP} shake={false} />
+            <BaseSprite health={displayBaseHealth} maxHp={BASE_MAX_HP} shake={shakeActive} />
           </div>
 
           {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number }>).map((f) => (
@@ -345,7 +405,16 @@ export default function GameBoard({
             </div>
           ))}
 
-          {(towers as Array<{ tower_id: string | number; tower_type: number; x: number; y: number; is_alive?: boolean }>).map((t) => {
+          {liveTowers.map((t) => {
+            const tier = liveSnapshot?.tokens && liveSnapshot.maxTokens
+              ? (() => {
+                  const def = TOWERS[Number(t.tower_type)];
+                  const key = TOKEN_NAMES[def?.tokenType ?? 0] as keyof typeof liveSnapshot.tokens;
+                  return getTokenTier(liveSnapshot.tokens[key] ?? 0, liveSnapshot.maxTokens[key] ?? 0);
+                })()
+              : null;
+            const liveT = liveSnapshot?.towers?.find((lt) => lt.tower_id === t.tower_id);
+            const attackFlash = liveT ? liveT.attackFlash > 0 : false;
             const isGPT = Number(t.tower_type) === 0;
             return (
               <div key={`tw-${t.tower_id}`} style={{
@@ -358,9 +427,38 @@ export default function GameBoard({
                 zIndex: 3, pointerEvents: 'none',
               }}>
                 {isGPT
-                  ? <GPTTowerSprite isAlive={t.is_alive} attackFlash={false} />
-                  : <TowerSprite towerType={t.tower_type} isAlive={t.is_alive} tier={null} attackFlash={false} />
+                  ? <GPTTowerSprite isAlive={t.is_alive} attackFlash={attackFlash} />
+                  : <TowerSprite towerType={t.tower_type} isAlive={t.is_alive} tier={tier} attackFlash={attackFlash} />
                 }
+              </div>
+            );
+          })}
+
+          {enemies.map((e: LiveEnemy) => {
+            const cfg = ENEMY_CFG[e.type] ?? ENEMY_CFG.TextJailbreak;
+            const sx = e.x * CELL_SIZE + (CELL_SIZE - cfg.sz) / 2;
+            const sy = e.y * CELL_SIZE + (CELL_SIZE - cfg.sz) / 2 - 4;
+            if (sx < -(CELL_SIZE * 2) || sx > GRID_W * CELL_SIZE + CELL_SIZE) return null;
+            return (
+              <div key={`e-${e.id}`} style={{ position: 'absolute', left: sx, top: sy, transition: 'left 0.05s linear', zIndex: 4, pointerEvents: 'none' }}>
+                <EnemySprite enemy={e} />
+              </div>
+            );
+          })}
+
+          {liveSnapshot?.particles?.map((p) => {
+            const alpha = Math.max(0, 1 - p.age / p.maxAge);
+            const sz = Math.max(2, Math.round(7 * (1 - p.age / p.maxAge)));
+            return (
+              <div key={p.id} style={{ position: 'absolute', left: p.x * CELL_SIZE - sz / 2, top: p.y * CELL_SIZE - sz / 2, width: sz, height: sz, borderRadius: '50%', background: p.color, opacity: alpha, pointerEvents: 'none', zIndex: 6 }} />
+            );
+          })}
+
+          {liveSnapshot?.floatingTexts?.map((ft) => {
+            const alpha = Math.max(0, 1 - ft.age / ft.maxAge);
+            return (
+              <div key={ft.id} style={{ position: 'absolute', left: ft.x * CELL_SIZE, top: ft.y * CELL_SIZE, transform: 'translate(-50%, -50%)', color: ft.color, fontSize: 12, fontFamily: 'monospace', fontWeight: 'bold', pointerEvents: 'none', zIndex: 7, opacity: alpha, textShadow: '0 1px 3px rgba(0,0,0,0.6)', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                {ft.text}
               </div>
             );
           })}

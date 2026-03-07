@@ -10,6 +10,9 @@ import type { ManifestContract } from './dojo/models';
 import { useActions } from './hooks/useActions';
 import { useBGM } from './hooks/useBGM';
 import { useGameState } from './hooks/useGameState';
+import type { WaveSnapshot } from './simulation/WaveSimulator';
+import { WaveReplay } from './simulation/WaveReplay';
+import { ENEMIES, GOLD_PER_WAVE, WAVE_COMPOSITIONS } from './constants';
 
 interface AppProps {
   account: AccountInterface | null;
@@ -44,6 +47,12 @@ export default function App({ account, manifest }: AppProps) {
   const [isResolving, setIsResolving] = useState(false);
   const [waveResult, setWaveResult] = useState<WaveResultSummary | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [liveSnapshot, setLiveSnapshot] = useState<WaveSnapshot | null>(null);
+  const simRef = useRef<InstanceType<typeof WaveReplay> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
+  const pendingResultRef = useRef<WaveResultSummary | null>(null);
 
   // Optimistic UI for building placement / upgrades
   const [optimisticTowers, setOptimisticTowers] = useState<unknown[]>([]);
@@ -128,17 +137,53 @@ export default function App({ account, manifest }: AppProps) {
     if (!isResolving) return;
     const pre = preWaveStateRef.current;
     if (!pre || !gameState) return;
-    if (Number(gameState.wave_number) > Number(pre.wave_number)) {
-      const goldEarned = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
-      const baseDmg    = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
-      setWaveResult({
-        waveNumber:           Number(gameState.wave_number),
-        goldEarned,
-        baseDamage:           baseDmg,
-        baseHealthRemaining:  gameState.base_health ?? BASE_MAX_HP,
-      });
-      setIsResolving(false);
+    const completedWave = Number(gameState.wave_number);
+    if (completedWave <= Number(pre.wave_number)) return;
+
+    // ── Derive outcome from on-chain state diff ──────────────────────────────
+    const goldEarned     = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
+    const baseDamageTaken = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
+    const waveBonus      = GOLD_PER_WAVE(completedWave);
+    const killGold       = Math.max(0, goldEarned - waveBonus);
+
+    const composition    = WAVE_COMPOSITIONS[completedWave] ?? [];
+    const countByType: Record<string, number> = {};
+    for (const g of composition) countByType[g.type] = g.count;
+
+    // Try all 8 kill/survive combinations to find which matches the on-chain killGold.
+    let killedTJ = false, killedCO = false, killedHS = false;
+    outer: for (let mask = 0; mask < 8; mask++) {
+      const kTJ = !!(mask & 1), kCO = !!(mask & 2), kHS = !!(mask & 4);
+      const gold =
+        (kTJ ? (countByType['TextJailbreak']   ?? 0) * (ENEMIES['TextJailbreak']?.gold   ?? 0) : 0) +
+        (kCO ? (countByType['ContextOverflow']  ?? 0) * (ENEMIES['ContextOverflow']?.gold  ?? 0) : 0) +
+        (kHS ? (countByType['HalluSwarm']       ?? 0) * (ENEMIES['HalluSwarm']?.gold       ?? 0) : 0);
+      if (gold === killGold) { killedTJ = kTJ; killedCO = kCO; killedHS = kHS; break outer; }
     }
+
+    // ── Store result for display after replay completes ──────────────────────
+    pendingResultRef.current = {
+      waveNumber:          completedWave,
+      goldEarned,
+      baseDamage:          baseDamageTaken,
+      baseHealthRemaining: gameState.base_health ?? BASE_MAX_HP,
+    };
+
+    setIsResolving(false);
+    preWaveStateRef.current = null;
+
+    // ── Start the outcome-driven replay animation ────────────────────────────
+    startReplay(
+      allTowers,
+      allFactories,
+      { ...pre },
+      completedWave,
+      killedTJ,
+      killedCO,
+      killedHS,
+      baseDamageTaken,
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.wave_number, isResolving]);
 
   // Polling fallback: if subscription doesn't deliver the update, poll every 3s
@@ -158,25 +203,88 @@ export default function App({ account, manifest }: AppProps) {
     return () => clearTimeout(t);
   }, [waveResult]);
 
-  // Cleanup timers on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
-  const allTowers = [...towers, ...optimisticTowers];
-  const allFactories = [...factories, ...optimisticFactories].map((f) => {
+  // Filter confirmed entities to current game only — Torii returns all historical
+  // records; previous games share tower_id/factory_id (they restart from 0).
+  // next_tower_id / next_factory_id from GameState are the exclusive upper bounds.
+  const maxTowerId   = gameState?.next_tower_id   ?? Infinity;
+  const maxFactoryId = gameState?.next_factory_id ?? Infinity;
+  const currentTowers    = towers.filter(   (t) => Number((t as { tower_id:   number }).tower_id)   < maxTowerId);
+  const currentFactories = factories.filter((f) => Number((f as { factory_id: number }).factory_id) < maxFactoryId);
+
+  const allTowers = [...currentTowers, ...optimisticTowers];
+  const allFactories = [...currentFactories, ...optimisticFactories].map((f) => {
     const typed = f as { factory_id: string | number; level: number };
     return { ...typed, level: Number(typed.level) + (upgradeOptimistic.counts[String(typed.factory_id)] ?? 0) };
   });
   const displayGold = (gameState?.gold ?? 0) - optimisticGoldSpent - upgradeOptimistic.gold;
   const displayBaseHealth = gameState?.base_health ?? BASE_MAX_HP;
 
+  function startReplay(
+    replayTowers: unknown[],
+    replayFactories: unknown[],
+    preState: typeof gameState,
+    waveNumber: number,
+    killedTJ: boolean,
+    killedCO: boolean,
+    killedHS: boolean,
+    baseDamageTaken: number,
+  ) {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    simRef.current = new WaveReplay({
+      towers:           replayTowers,
+      factories:        replayFactories,
+      gameState:        preState,
+      waveNumber,
+      killedTJ,
+      killedCO,
+      killedHS,
+      baseDamageTaken,
+    });
+    lastTimeRef.current = performance.now();
+    setIsReplaying(true);
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - lastTimeRef.current) / 1000, 0.05);
+      lastTimeRef.current = now;
+      if (simRef.current) {
+        const snap = simRef.current.step(dt);
+        setLiveSnapshot({ ...snap } as WaveSnapshot);
+        if (!snap.done) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          rafRef.current = null;
+          // Replay finished — now show the result card
+          setLiveSnapshot(null);
+          setIsReplaying(false);
+          if (pendingResultRef.current) {
+            setWaveResult(pendingResultRef.current);
+            pendingResultRef.current = null;
+          }
+        }
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
+  function stopReplay() {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    simRef.current = null;
+    setLiveSnapshot(null);
+    setIsReplaying(false);
+    pendingResultRef.current = null;
+  }
+
   function handleStartWave() {
     if (!gameState || isResolving || countdown !== null) return;
     setWaveResult(null);
-    // Snapshot state before wave so we can compute the diff after
     preWaveStateRef.current = { ...gameState, gold: displayGold };
 
     let remaining = 3;
@@ -190,10 +298,10 @@ export default function App({ account, manifest }: AppProps) {
       } else {
         setCountdown(null);
         setIsResolving(true);
-        // Fire the tx — contract resolves the wave atomically
         actions.startWave().catch((e: unknown) => {
           console.error('startWave failed:', e);
           setIsResolving(false);
+          stopReplay();
           preWaveStateRef.current = null;
         });
       }
@@ -282,7 +390,7 @@ export default function App({ account, manifest }: AppProps) {
   };
 
   const isCountingDown = countdown !== null;
-  const isBusy = isResolving || isCountingDown;
+  const isBusy = isResolving || isCountingDown || isReplaying;
 
   return (
     <div className="app-root">
@@ -297,6 +405,7 @@ export default function App({ account, manifest }: AppProps) {
         <GameBoard
           towers={allTowers}
           factories={allFactories}
+          liveSnapshot={liveSnapshot}
           selectedBuild={selectedBuild}
           onCellClick={handleCellClick}
           isWaveActive={isBusy}
@@ -321,7 +430,7 @@ export default function App({ account, manifest }: AppProps) {
         </div>
       )}
 
-      {isResolving && (
+      {isResolving && !isReplaying && (
         <div className="app-resolving-overlay">
           <div className="app-resolving-card">
             <div className="app-resolving-spinner" />
