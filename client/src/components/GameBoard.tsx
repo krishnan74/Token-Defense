@@ -513,35 +513,64 @@ export default function GameBoard({
           </svg>
 
           {/* ── Conveyor tiles ── */}
-          {conveyors.flatMap((conv) =>
-            conv.tiles.slice(0, conv.revealedCount).map((tile, idx) => {
+          {conveyors.flatMap((conv) => {
+            const xs = Math.sign(conv.tx - conv.fx);
+            const ys = Math.sign(conv.ty - conv.fy);
+            // Arrow chars based on factory→tower direction
+            const hArrow = xs > 0 ? '→' : '←';
+            const vArrow = ys > 0 ? '↓' : '↑';
+
+            return conv.tiles.slice(0, conv.revealedCount).map((tile, idx) => {
               const isNew = idx === conv.revealedCount - 1;
-              const isV = tile.dir === 'V';
-              const isC = tile.dir === 'C';
-              // H: wide strip | V: tall strip | C: corner square bridging both
-              const w = isC ? CELL * 0.4 : isV ? CELL * 0.28 : CELL * 0.85;
-              const h = isC ? CELL * 0.4 : isV ? CELL * 0.85 : CELL * 0.28;
+              const isV   = tile.dir === 'V';
+              const isC   = tile.dir === 'C';
+
+              // Dimensions: H = wide strip, V = tall strip, C = corner square
+              const w = isC ? CELL * 0.38 : isV ? CELL * 0.30 : CELL * 0.88;
+              const h = isC ? CELL * 0.38 : isV ? CELL * 0.88 : CELL * 0.30;
+              const left = tile.x * CELL + (CELL - w) / 2;
+              const top  = tile.y * CELL + (CELL - h) / 2;
+
+              // Rail groove gradient: dark edge → color → dark edge
+              const grad = isV
+                ? `linear-gradient(to right, rgba(0,0,0,0.45) 0%, ${conv.color} 25%, ${conv.color} 75%, rgba(0,0,0,0.45) 100%)`
+                : `linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, ${conv.color} 25%, ${conv.color} 75%, rgba(0,0,0,0.45) 100%)`;
+
+              const arrowLabel = isC ? '' : isV ? vArrow : hArrow;
+
               return (
                 <div
                   key={`ct-${conv.id}-${idx}`}
                   style={{
-                    position: 'absolute',
-                    left: tile.x * CELL + (CELL - w) / 2,
-                    top:  tile.y * CELL + (CELL - h) / 2,
-                    width: w, height: h,
-                    background: conv.color,
-                    opacity: 0.65,
-                    border: `1px solid ${conv.color}`,
-                    boxShadow: `1px 1px 0 rgba(0,0,0,0.45)`,
+                    position: 'absolute', left, top, width: w, height: h,
+                    background: grad,
+                    border: `1px solid rgba(0,0,0,0.5)`,
+                    boxShadow: `1px 1px 0 rgba(0,0,0,0.4)`,
                     zIndex: 1, pointerEvents: 'none',
                     transformOrigin: 'center',
                     animation: isNew ? 'conveyorPop 0.35s steps(4) forwards' : 'none',
                     imageRendering: 'pixelated',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    overflow: 'hidden',
                   }}
-                />
+                >
+                  {arrowLabel && (
+                    <span style={{
+                      fontFamily: "'VT323', monospace",
+                      fontSize: Math.min(w, h) * 0.85,
+                      color: 'rgba(255,255,255,0.55)',
+                      lineHeight: 1,
+                      userSelect: 'none',
+                      textShadow: '0 0 3px rgba(0,0,0,0.7)',
+                      pointerEvents: 'none',
+                    }}>
+                      {arrowLabel}
+                    </span>
+                  )}
+                </div>
               );
-            })
-          )}
+            });
+          })}
 
           {/* ── Base ── */}
           <div style={{ position: 'absolute', left: BASE_X * CELL + 2, top: BASE_Y * CELL + 2, zIndex: 3, pointerEvents: 'none' }}>

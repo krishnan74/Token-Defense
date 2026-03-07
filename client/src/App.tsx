@@ -71,6 +71,19 @@ export interface Conveyor {
   tokenCount: number;
 }
 
+// Replay params captured when chain confirms wave completion
+interface PendingReplay {
+  towers: unknown[];
+  factories: unknown[];
+  preState: NonNullable<ReturnType<typeof useGameState>['gameState']>;
+  waveNumber: number;
+  killedTJ: boolean;
+  killedCO: boolean;
+  killedHS: boolean;
+  baseDamageTaken: number;
+  resultSummary: WaveResultSummary;
+}
+
 const EMPTY_STATS: GameStats = { totalKills: 0, totalGoldEarned: 0, totalBaseDamage: 0, wavesCompleted: 0 };
 
 export default function App({ account, manifest }: AppProps) {
@@ -81,7 +94,8 @@ export default function App({ account, manifest }: AppProps) {
 
   const [selectedBuild, setSelectedBuild] = useState<BuildSelection | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [isResolving, setIsResolving] = useState(false);
+  // isWaitingWaveActive: startWave tx sent, waiting for wave_number to increment
+  const [isWaitingWaveActive, setIsWaitingWaveActive] = useState(false);
   const [waveResult, setWaveResult] = useState<WaveResultSummary | null>(null);
   const [gameOver, setGameOver] = useState<GameOver | null>(null);
   const [gameStats, setGameStats] = useState<GameStats>(EMPTY_STATS);
@@ -96,7 +110,11 @@ export default function App({ account, manifest }: AppProps) {
   const simRef = useRef<InstanceType<typeof WaveReplay> | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
-  const pendingResultRef = useRef<WaveResultSummary | null>(null);
+
+  // Pre-wave snapshot (captured at click time, before the tx)
+  const preWaveStateRef = useRef<typeof gameState>(null);
+  // Replay params + result, computed when chain confirms
+  const pendingReplayRef = useRef<PendingReplay | null>(null);
 
   // SFX tracking during replay
   const sfxPrevRef = useRef({ particles: 0, shakes: 0 });
@@ -107,8 +125,6 @@ export default function App({ account, manifest }: AppProps) {
   const [optimisticFactories, setOptimisticFactories] = useState<unknown[]>([]);
   const [optimisticGoldSpent, setOptimisticGoldSpent] = useState(0);
   const [upgradeOptimistic, setUpgradeOptimistic] = useState<UpgradeOptimistic>({ counts: {}, gold: 0 });
-
-  const preWaveStateRef = useRef<typeof gameState>(null);
 
   // ── Sound effects during wave replay ──────────────────────────────────────
   useEffect(() => {
@@ -152,7 +168,7 @@ export default function App({ account, manifest }: AppProps) {
   useEffect(() => {
     if (!optimisticFactories.length) return;
     setOptimisticFactories((prev) => {
-      const typed    = prev as Array<{ factory_type: number; x: number; y: number }>;
+      const typed     = prev as Array<{ factory_type: number; x: number; y: number }>;
       const typedFact = factories as Array<{ factory_type: number; x: number; y: number }>;
       const unconfirmed = typed.filter(
         (opt) =>
@@ -198,13 +214,18 @@ export default function App({ account, manifest }: AppProps) {
     });
   }, [factories]);
 
-  // ── Wave resolution detection ──────────────────────────────────────────────
+  // ── Wave confirmation: wave_number++ detected → start countdown ───────────
+  // start_wave() completes the wave on-chain in one tx; wave_number increments
+  // immediately. We wait for that, then run countdown, then WaveReplay.
   useEffect(() => {
-    if (!isResolving) return;
+    if (!isWaitingWaveActive || !gameState) return;
     const pre = preWaveStateRef.current;
-    if (!pre || !gameState) return;
+    if (!pre) return;
     const completedWave = Number(gameState.wave_number);
-    if (completedWave <= Number(pre.wave_number)) return;
+    if (completedWave <= Number(pre.wave_number)) return; // not confirmed yet
+
+    // Chain confirmed — compute outcome from gold/health diff
+    setIsWaitingWaveActive(false);
 
     const goldEarned      = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
     const baseDamageTaken = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
@@ -230,25 +251,53 @@ export default function App({ account, manifest }: AppProps) {
       (killedCO ? (countByType['ContextOverflow'] ?? 0) : 0) +
       (killedHS ? (countByType['HalluSwarm']      ?? 0) : 0);
 
-    pendingResultRef.current = {
-      waveNumber: completedWave, goldEarned, baseDamage: baseDamageTaken,
-      baseHealthRemaining: gameState.base_health ?? BASE_MAX_HP,
-      killedTJ, killedCO, killedHS, killCount,
-    };
+    const baseHealthRemaining = gameState.base_health ?? BASE_MAX_HP;
 
-    setIsResolving(false);
+    // Stash everything for after the countdown
+    pendingReplayRef.current = {
+      towers:   allTowers,
+      factories: allFactories,
+      preState: { ...pre } as NonNullable<typeof gameState>,
+      waveNumber: completedWave,
+      killedTJ, killedCO, killedHS,
+      baseDamageTaken,
+      resultSummary: {
+        waveNumber: completedWave, goldEarned, baseDamage: baseDamageTaken,
+        baseHealthRemaining, killedTJ, killedCO, killedHS, killCount,
+      },
+    };
     preWaveStateRef.current = null;
 
-    startReplay(allTowers, allFactories, { ...pre }, completedWave, killedTJ, killedCO, killedHS, baseDamageTaken);
+    // Start countdown
+    let remaining = 3;
+    setCountdown(remaining);
+    sfx.playCountdown();
+    const advance = () => {
+      remaining--;
+      if (remaining > 0) {
+        setCountdown(remaining);
+        sfx.playCountdown();
+        countdownTimerRef.current = setTimeout(advance, 800);
+      } else {
+        setCountdown(null);
+        sfx.playWaveStart();
+        const p = pendingReplayRef.current;
+        if (p) {
+          startReplay(p.towers, p.factories, p.preState, p.waveNumber,
+                      p.killedTJ, p.killedCO, p.killedHS, p.baseDamageTaken);
+        }
+      }
+    };
+    countdownTimerRef.current = setTimeout(advance, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.wave_number, isResolving]);
+  }, [gameState?.wave_number, isWaitingWaveActive]);
 
-  // Polling fallback while resolving
+  // Polling fallback while waiting for chain
   useEffect(() => {
-    if (!isResolving) return;
-    const id = setInterval(() => refreshGameState(), 3000);
+    if (!isWaitingWaveActive) return;
+    const id = setInterval(() => refreshGameState(), 2000);
     return () => clearInterval(id);
-  }, [isResolving, refreshGameState]);
+  }, [isWaitingWaveActive, refreshGameState]);
 
   // Auto-dismiss result card
   useEffect(() => {
@@ -270,7 +319,7 @@ export default function App({ account, manifest }: AppProps) {
     };
   }, []);
 
-  // ── Entity filtering (exclude historical Torii records from past games) ─────
+  // ── Entity filtering ────────────────────────────────────────────────────────
   const maxTowerId   = gameState?.next_tower_id   ?? Infinity;
   const maxFactoryId = gameState?.next_factory_id ?? Infinity;
   const currentTowers    = towers.filter(   (t) => Number((t as { tower_id:   number }).tower_id)   < maxTowerId);
@@ -284,8 +333,7 @@ export default function App({ account, manifest }: AppProps) {
 
   const displayGold = (gameState?.gold ?? 0) - optimisticGoldSpent - upgradeOptimistic.gold;
 
-  // During replay, follow the animated base health so sidebar tracks the animation.
-  // Once replay ends liveSnapshot is null and we fall back to the on-chain value.
+  // During replay, follow the animated base health so sidebar tracks the animation
   const displayBaseHealth = isReplaying
     ? (liveSnapshot?.baseHealth ?? (gameState?.base_health ?? BASE_MAX_HP))
     : (gameState?.base_health ?? BASE_MAX_HP);
@@ -327,9 +375,10 @@ export default function App({ account, manifest }: AppProps) {
           rafRef.current = null;
           setLiveSnapshot(null);
           setIsReplaying(false);
-          const result = pendingResultRef.current;
-          pendingResultRef.current = null;
-          if (result) {
+          const pending = pendingReplayRef.current;
+          pendingReplayRef.current = null;
+          if (pending) {
+            const result = pending.resultSummary;
             // Achievements
             unlock('first_wave');
             if (result.waveNumber >= 5)  unlock('wave_5');
@@ -345,15 +394,14 @@ export default function App({ account, manifest }: AppProps) {
 
             // Cumulative stats
             setGameStats((prev) => ({
-              totalKills:     prev.totalKills    + result.killCount,
+              totalKills:      prev.totalKills      + result.killCount,
               totalGoldEarned: prev.totalGoldEarned + result.goldEarned,
-              totalBaseDamage: prev.totalBaseDamage  + result.baseDamage,
-              wavesCompleted: prev.wavesCompleted + 1,
+              totalBaseDamage: prev.totalBaseDamage + result.baseDamage,
+              wavesCompleted:  prev.wavesCompleted  + 1,
             }));
 
             sfx.playWaveComplete();
 
-            // Victory / defeat / result
             if (result.baseHealthRemaining <= 0) {
               sfx.playDefeat();
               setGameOver({ victory: false, waveNumber: result.waveNumber, baseHealthRemaining: 0 });
@@ -375,7 +423,7 @@ export default function App({ account, manifest }: AppProps) {
     simRef.current = null;
     setLiveSnapshot(null);
     setIsReplaying(false);
-    pendingResultRef.current = null;
+    pendingReplayRef.current = null;
   }
 
   function toggleReplaySpeed() {
@@ -386,33 +434,18 @@ export default function App({ account, manifest }: AppProps) {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function handleStartWave() {
-    if (!gameState || isResolving || countdown !== null) return;
+    if (!gameState || isWaitingWaveActive || countdown !== null || isReplaying) return;
     setWaveResult(null);
+    // Snapshot the CURRENT state before the tx changes anything
     preWaveStateRef.current = { ...gameState, gold: displayGold };
-
-    let remaining = 3;
-    setCountdown(remaining);
-    sfx.playCountdown();
-
-    const advance = () => {
-      remaining--;
-      if (remaining > 0) {
-        setCountdown(remaining);
-        sfx.playCountdown();
-        countdownTimerRef.current = setTimeout(advance, 800);
-      } else {
-        setCountdown(null);
-        sfx.playWaveStart();
-        setIsResolving(true);
-        actions.startWave().catch((e: unknown) => {
-          console.error('startWave failed:', e);
-          setIsResolving(false);
-          stopReplay();
-          preWaveStateRef.current = null;
-        });
-      }
-    };
-    countdownTimerRef.current = setTimeout(advance, 800);
+    setIsWaitingWaveActive(true);
+    sfx.playClick();
+    actions.startWave().catch((e: unknown) => {
+      console.error('startWave failed:', e);
+      setIsWaitingWaveActive(false);
+      preWaveStateRef.current = null;
+      stopReplay();
+    });
   }
 
   function handleUpgrade(id: number | string) {
@@ -434,9 +467,9 @@ export default function App({ account, manifest }: AppProps) {
   }
 
   async function handleCellClick(col: number, row: number) {
-    if (!selectedBuild || !gameState || isResolving || countdown !== null) return;
+    if (!selectedBuild || !gameState || isWaitingWaveActive || countdown !== null || isReplaying) return;
     if (col === BASE_X && row === BASE_Y) return;
-    if (isPathTile(col, row)) return; // cannot build on enemy path
+    if (isPathTile(col, row)) return;
 
     if (selectedBuild.type === 'tower') {
       const def = TOWERS[selectedBuild.id];
@@ -526,12 +559,12 @@ export default function App({ account, manifest }: AppProps) {
   const displayGameState = {
     ...gameState,
     gold: displayGold,
-    is_wave_active: isResolving,
+    is_wave_active: isWaitingWaveActive || countdown !== null || isReplaying,
     base_health: displayBaseHealth,
   };
 
   const isCountingDown = countdown !== null;
-  const isBusy = isResolving || isCountingDown || isReplaying;
+  const isBusy = isWaitingWaveActive || isCountingDown || isReplaying;
 
   return (
     <div className="app-root">
@@ -569,12 +602,12 @@ export default function App({ account, manifest }: AppProps) {
         </div>
       )}
 
-      {/* Wave resolving spinner */}
-      {isResolving && !isReplaying && (
+      {/* Waiting for startWave tx to confirm on chain */}
+      {isWaitingWaveActive && (
         <div className="app-resolving-overlay">
           <div className="app-resolving-card">
             <div className="app-resolving-spinner" />
-            <div className="app-resolving-text">RESOLVING ON-CHAIN...</div>
+            <div className="app-resolving-text">CONFIRMING TX...</div>
           </div>
         </div>
       )}
@@ -701,11 +734,8 @@ const MENU_ENEMIES = [
 function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction: (() => void) | undefined }) {
   return (
     <div className="menu-root">
-      {/* Decorative grass strip */}
       <div className="menu-grass" />
-
       <div className="menu-content">
-        {/* Title */}
         <div className="menu-title-block">
           <div className="menu-pixel-deco">◆ ◆ ◆</div>
           <h1 className="menu-title">TOKEN DEFENSE</h1>
@@ -713,14 +743,12 @@ function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction
           <div className="menu-pixel-deco">◆ ◆ ◆</div>
         </div>
 
-        {/* Tower + Enemy showcase */}
         <div className="menu-showcase">
           <div className="menu-showcase-col">
             <div className="menu-showcase-label">TOWERS</div>
             <div className="menu-cards-row">
               {MENU_TOWERS.map((t) => (
                 <div key={t.label} className="menu-tower-card" style={{ background: t.color, border: `3px solid ${t.dark}` }}>
-                  {/* Battlements */}
                   <div style={{ display: 'flex', height: 10 }}>
                     {[0,1,2,3].map((i) => (
                       <div key={i} style={{ flex: 1, background: i % 2 === 0 ? t.dark : t.color }} />
@@ -742,13 +770,11 @@ function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction
               {MENU_ENEMIES.map((e) => (
                 <div key={e.label} className="menu-enemy-card">
                   <div style={{
-                    width: e.sz, height: e.sz,
-                    background: e.color,
+                    width: e.sz, height: e.sz, background: e.color,
                     border: `2px solid ${e.dark}`,
                     borderRadius: e.round ? '50%' : 2,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `3px 3px 0 ${e.dark}`,
-                    margin: '0 auto 6px',
+                    boxShadow: `3px 3px 0 ${e.dark}`, margin: '0 auto 6px',
                   }}>
                     <span style={{ fontFamily: "'VT323', monospace", fontSize: e.sz < 32 ? 12 : 16, color: '#fff', textShadow: `1px 1px 0 ${e.dark}` }}>
                       {e.label}
@@ -762,14 +788,12 @@ function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction
           </div>
         </div>
 
-        {/* How to play */}
         <div className="menu-howto">
           <span className="menu-howto-item">◆ Place towers on grass tiles</span>
           <span className="menu-howto-item">◆ Build factories to generate tokens</span>
           <span className="menu-howto-item">◆ Survive all 10 waves to win</span>
         </div>
 
-        {/* CTA */}
         {mode === 'connect' ? (
           <div className="menu-cta-block">
             <div className="menu-cta-hint">Connect your Cartridge Controller to play</div>
@@ -781,7 +805,6 @@ function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction
         )}
       </div>
 
-      {/* Footer */}
       <div className="menu-footer">
         TOKEN DEFENSE · Built on Dojo / StarkNet · 10 Waves · Survive them all
       </div>

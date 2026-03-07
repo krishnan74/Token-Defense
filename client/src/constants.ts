@@ -150,5 +150,7 @@ export function computeConveyorTiles(
   if (ys !== 0) {
     for (let y = fy + ys; y !== ty + ys; y += ys) tiles.push({ x: tx, y, dir: 'V' });
   }
-  return tiles.filter((t) => !(t.x === fx && t.y === fy) && !(t.x === tx && t.y === ty));
+  return tiles.filter(
+    (t) => !(t.x === fx && t.y === fy) && !(t.x === tx && t.y === ty) && !isPathTile(t.x, t.y),
+  );
 }
