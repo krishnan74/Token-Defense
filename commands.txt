@@ -1,0 +1,3 @@
+torii --rpc https://api.cartridge.gg/x/starknet/sepolia  --world 0x01eaca139f880c110e55db572ffac49821f71624d7b31119c11693375088c966 --http.cors_origins "*"
+pnpm run dev
+deploy_sepolia.sh
