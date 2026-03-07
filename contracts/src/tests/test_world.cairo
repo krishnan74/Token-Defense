@@ -17,7 +17,8 @@ mod tests {
     };
     use dojo_intro::constants::{
         INIT_GOLD, INIT_INPUT_TOKENS, INIT_IMAGE_TOKENS, INIT_CODE_TOKENS, BASE_MAX_HP,
-        UPGRADE_COST, INPUT_FACTORY_COST, GPT_MAX_HP,
+        UPGRADE_COST, INPUT_FACTORY_COST, GPT_MAX_HP, WAVE_GOLD_BASE, WAVE_GOLD_PER_WAVE,
+        TJ_GOLD, TJ_BASE_DAMAGE, INPUT_TOKENS_BASE,
     };
 
     // ── World setup ───────────────────────────────────────────────────────────
@@ -88,7 +89,6 @@ mod tests {
         assert(state.input_tokens == INIT_INPUT_TOKENS, 'wrong input tokens');
         assert(state.image_tokens == INIT_IMAGE_TOKENS, 'wrong image tokens');
         assert(state.code_tokens == INIT_CODE_TOKENS, 'wrong code tokens');
-        assert(!state.is_wave_active, 'should not be active');
         assert(!state.game_over, 'should not be game over');
         assert(!state.victory, 'should not be victory');
     }
@@ -226,66 +226,52 @@ mod tests {
     }
 
     // ── Wave system tests ─────────────────────────────────────────────────────
+    // Wave 1 composition: 6 TJ, 0 CO, 0 HS
+    // Wave 1 bonus gold: 50 + 1×10 = 60
+    // TJ: hp=20, gold=2, base_damage=1, speed_x100=150
+    // GPT tower at (9,1): covers 8 path cells
+    //   shots_vs_TJ = round(8 * 1_000_000 / (150 * 100)) = round(533) = 5
+    //   damage_vs_TJ = 5 * 10 = 50 ≥ 20 → kills all TJ
 
     #[test]
-    fn test_start_wave_sets_active() {
+    fn test_start_wave_no_towers_applies_base_damage() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
         game.new_game();
+        // No towers: all 6 TJ reach base → base_damage = 6×1 = 6
         wave.start_wave();
-
-        let state: GameState = world.read_model(player);
-        assert(state.is_wave_active, 'wave should be active');
-    }
-
-    #[test]
-    #[should_panic(expected: ('Wave already active', 'ENTRYPOINT_FAILED',))]
-    fn test_start_wave_twice_panics() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (_, game, _, wave) = setup();
-        game.new_game();
-        wave.start_wave();
-        wave.start_wave();
-    }
-
-    #[test]
-    fn test_commit_wave_result_happy_path() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (mut world, game, building, wave) = setup();
-        game.new_game();
-        building.place_tower(0, 3, 2);
-        wave.start_wave();
-
-        wave.commit_wave_result(
-            array![0],
-            array![10],
-            8,  // kill gold (≤ wave 1 max of 12)
-            10, // input consumed
-            5,  // image consumed
-            5,  // code consumed
-            2,  // base damage (≤ wave 1 max of 6)
-        );
 
         let state: GameState = world.read_model(player);
         assert(state.wave_number == 1, 'wave should advance');
-        assert(!state.is_wave_active, 'wave should be inactive');
-        // Gold = 200 (init) + 8 (kills) + 60 (wave bonus: 50 + 1*10)
-        assert(state.gold == 200 + 8 + 60, 'wrong gold');
-        assert(state.base_health == BASE_MAX_HP - 2, 'wrong base health');
-
-        let tower: Tower = world.read_model((player, 0_u32));
-        assert(tower.health == GPT_MAX_HP - 10, 'wrong tower health');
-        assert(tower.is_alive, 'tower should be alive');
+        assert(state.base_health == BASE_MAX_HP - 6, 'wrong base health');
+        // kill_gold=0, wave_bonus=60 → gold = 200 + 60 = 260
+        assert(state.gold == INIT_GOLD + 60, 'wrong gold no kills');
+        assert(!state.game_over, 'should not be game over');
     }
 
     #[test]
-    fn test_commit_wave_bonus_computed_onchain() {
+    fn test_start_wave_tower_kills_all_tj() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, building, wave) = setup();
+        game.new_game();
+        // GPT tower at (9,1) kills all 6 TJ
+        building.place_tower(0, 9, 1);
+        wave.start_wave();
+
+        let state: GameState = world.read_model(player);
+        assert(state.base_health == BASE_MAX_HP, 'base should be full');
+        // kill_gold = 6×2 = 12, wave_bonus = 60 → gold = 200 + 12 + 60 = 272
+        assert(state.gold == INIT_GOLD + 12 + 60, 'wrong gold with kills');
+        // Tokens consumed: 5 shots/enemy × 6 enemies × 2 = 60 > max_input(50) → capped at 50
+        assert(state.input_tokens == 0, 'input tokens should be empty');
+    }
+
+    #[test]
+    fn test_start_wave_advances_wave_number() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
@@ -293,84 +279,47 @@ mod tests {
         game.new_game();
         wave.start_wave();
 
-        // Wave 1 bonus = 50 + 1*10 = 60; client sends 0 kill gold
-        wave.commit_wave_result(array![], array![], 0, 0, 0, 0, 0);
-
         let state: GameState = world.read_model(player);
-        assert(state.gold == INIT_GOLD + 60, 'wave bonus should be added');
+        assert(state.wave_number == 1, 'wave_number should be 1');
+        assert(!state.victory, 'should not be victory yet');
     }
 
     #[test]
-    fn test_commit_wave_token_production_from_factory() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (mut world, game, building, wave) = setup();
-        game.new_game();
-        building.place_factory(0, 4, 4); // Input factory level 1: +30
-
-        wave.start_wave();
-        // max_input = 50 (init) + 30 (factory) = 80; consume 20
-        wave.commit_wave_result(array![], array![], 0, 20, 0, 0, 0);
-
-        let state: GameState = world.read_model(player);
-        assert(state.input_tokens == 60, 'wrong input tokens'); // 80 - 20 = 60
-    }
-
-    #[test]
-    fn test_commit_wave_kills_tower_at_zero_health() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (mut world, game, building, wave) = setup();
-        game.new_game();
-        building.place_tower(0, 3, 2); // GPT: 100 HP
-        wave.start_wave();
-
-        wave.commit_wave_result(array![0], array![100], 0, 0, 0, 0, 0);
-
-        let tower: Tower = world.read_model((player, 0_u32));
-        assert(tower.health == 0, 'health should be 0');
-        assert(!tower.is_alive, 'tower should be dead');
-    }
-
-    #[test]
-    fn test_commit_wave_game_over_when_base_destroyed() {
+    fn test_start_wave_game_over_when_base_destroyed() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
         game.new_game();
 
-        // Set base_health to 6 so wave-1 max damage (6) destroys it
+        // Set base_health to exactly wave-1 max damage (6) so it's destroyed
         let mut state: GameState = world.read_model(player);
         state.base_health = 6;
         world.write_model_test(@state);
 
-        wave.start_wave();
-        wave.commit_wave_result(array![], array![], 0, 0, 0, 0, 6);
+        wave.start_wave(); // no towers → all 6 TJ reach base → 6 damage
 
         let state: GameState = world.read_model(player);
-        assert(state.base_health == 0, 'base should be destroyed');
+        assert(state.base_health == 0, 'base should be 0');
         assert(state.game_over, 'game_over should be set');
         assert(!state.victory, 'should not be victory');
     }
 
     #[test]
-    fn test_commit_wave_victory_at_wave_10() {
+    fn test_start_wave_victory_at_wave_10() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
         game.new_game();
 
-        // Fast-forward to wave 9
+        // Fast-forward to wave 9 with very high base_health so base survives wave 10
         let mut state: GameState = world.read_model(player);
         state.wave_number = 9;
+        state.base_health = 200; // survive wave 10 max damage (40)
         world.write_model_test(@state);
 
         wave.start_wave();
-        wave.commit_wave_result(array![], array![], 0, 0, 0, 0, 0);
 
         let state: GameState = world.read_model(player);
         assert(state.wave_number == 10, 'should be wave 10');
@@ -378,116 +327,92 @@ mod tests {
         assert(!state.game_over, 'should not be game over');
     }
 
-    // ── Bound check tests ─────────────────────────────────────────────────────
-
     #[test]
-    #[should_panic(expected: ('Gold overclaim', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_gold_overclaim() {
+    fn test_start_wave_token_production_from_factory() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
-        let (_, game, _, wave) = setup();
+        let (mut world, game, building, wave) = setup();
         game.new_game();
+        // Input factory level 1: +30 tokens/wave → max_input = 50 + 30 = 80
+        building.place_factory(0, 4, 4);
+        // No towers → no consumption
         wave.start_wave();
 
-        // Wave 1 max kill gold = 12; send 13
-        wave.commit_wave_result(array![], array![], 13, 0, 0, 0, 0);
+        let state: GameState = world.read_model(player);
+        // input_tokens = 50 (carry) + 30 (prod) - 0 (consumed) = 80
+        assert(state.input_tokens == INIT_INPUT_TOKENS + INPUT_TOKENS_BASE, 'wrong input tokens');
     }
 
     #[test]
-    #[should_panic(expected: ('Base damage overclaim', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_base_damage_overclaim() {
+    fn test_start_wave_wave_bonus_computed_onchain() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
-        let (_, game, _, wave) = setup();
+        let (mut world, game, _, wave) = setup();
         game.new_game();
-        wave.start_wave();
 
-        // Wave 1 max base damage = 6; send 7
-        wave.commit_wave_result(array![], array![], 0, 0, 0, 0, 7);
+        // Fast-forward to wave 4 to test non-trivial bonus
+        let mut state: GameState = world.read_model(player);
+        state.wave_number = 4;
+        world.write_model_test(@state);
+
+        wave.start_wave(); // wave 5 bonus = 50 + 5×10 = 100
+
+        let state: GameState = world.read_model(player);
+        // wave 5: (7 TJ, 3 CO, 0 HS), no towers → all reach base
+        // wave bonus = 50 + 5*10 = 100
+        // kill_gold = 0
+        assert(state.gold == INIT_GOLD + 100, 'wave bonus should be 100');
+    }
+
+    // ── Guard tests ───────────────────────────────────────────────────────────
+
+    #[test]
+    #[should_panic(expected: ('Game over', 'ENTRYPOINT_FAILED',))]
+    fn test_start_wave_guards_game_over() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, _, wave) = setup();
+        game.new_game();
+
+        let mut state: GameState = world.read_model(player);
+        state.game_over = true;
+        world.write_model_test(@state);
+
+        wave.start_wave();
     }
 
     #[test]
-    #[should_panic(expected: ('Input tokens overclaim', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_input_tokens_overclaim() {
+    #[should_panic(expected: ('Already won', 'ENTRYPOINT_FAILED',))]
+    fn test_start_wave_guards_victory() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
-        let (_, game, _, wave) = setup();
+        let (mut world, game, _, wave) = setup();
         game.new_game();
-        wave.start_wave();
 
-        // Max input = 50 (init, no factory); send 51
-        wave.commit_wave_result(array![], array![], 0, 51, 0, 0, 0);
+        let mut state: GameState = world.read_model(player);
+        state.victory = true;
+        world.write_model_test(@state);
+
+        wave.start_wave();
     }
 
     #[test]
-    #[should_panic(expected: ('Image tokens overclaim', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_image_tokens_overclaim() {
+    #[should_panic(expected: ('Max waves reached', 'ENTRYPOINT_FAILED',))]
+    fn test_start_wave_guards_max_waves() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
-        let (_, game, _, wave) = setup();
+        let (mut world, game, _, wave) = setup();
         game.new_game();
+
+        let mut state: GameState = world.read_model(player);
+        state.wave_number = 10;
+        world.write_model_test(@state);
+
         wave.start_wave();
-
-        // Max image = 15 (init); send 16
-        wave.commit_wave_result(array![], array![], 0, 0, 16, 0, 0);
-    }
-
-    #[test]
-    #[should_panic(expected: ('Code tokens overclaim', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_code_tokens_overclaim() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (_, game, _, wave) = setup();
-        game.new_game();
-        wave.start_wave();
-
-        // Max code = 20 (init); send 21
-        wave.commit_wave_result(array![], array![], 0, 0, 0, 21, 0);
-    }
-
-    #[test]
-    #[should_panic(expected: ('Tower damage overclaim', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_tower_damage_overclaim() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (_, game, building, wave) = setup();
-        game.new_game();
-        building.place_tower(0, 3, 2); // GPT max HP = 100
-        wave.start_wave();
-
-        // Send 101 damage to GPT tower
-        wave.commit_wave_result(array![0], array![101], 0, 0, 0, 0, 0);
-    }
-
-    #[test]
-    #[should_panic(expected: ('No active wave', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_without_start() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (_, game, _, wave) = setup();
-        game.new_game();
-
-        wave.commit_wave_result(array![], array![], 0, 0, 0, 0, 0);
-    }
-
-    #[test]
-    #[should_panic(expected: ('Array length mismatch', 'ENTRYPOINT_FAILED',))]
-    fn test_commit_wave_mismatched_arrays() {
-        let player = starknet::contract_address_const::<0x1>();
-        starknet::testing::set_contract_address(player);
-
-        let (_, game, _, wave) = setup();
-        game.new_game();
-        wave.start_wave();
-
-        // 2 IDs, 1 damage value
-        wave.commit_wave_result(array![0, 1], array![10], 0, 0, 0, 0, 0);
     }
 }

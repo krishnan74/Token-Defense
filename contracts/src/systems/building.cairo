@@ -20,7 +20,6 @@ pub mod building_system {
             let player = get_caller_address();
 
             let mut game: GameState = world.read_model(player);
-            assert(!game.is_wave_active, 'Wave is active');
             assert(!game.game_over, 'Game over');
             assert(tower_type <= 2, 'Invalid tower type');
 
@@ -47,7 +46,6 @@ pub mod building_system {
             let player = get_caller_address();
 
             let mut game: GameState = world.read_model(player);
-            assert(!game.is_wave_active, 'Wave is active');
             assert(!game.game_over, 'Game over');
             assert(factory_type <= 2, 'Invalid factory type');
 
@@ -76,7 +74,6 @@ pub mod building_system {
             let player = get_caller_address();
 
             let mut game: GameState = world.read_model(player);
-            assert(!game.is_wave_active, 'Wave is active');
             assert(!game.game_over, 'Game over');
             assert(game.gold >= UPGRADE_COST, 'Not enough gold');
 

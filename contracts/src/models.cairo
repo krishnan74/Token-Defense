@@ -8,7 +8,6 @@ pub struct GameState {
     pub player: ContractAddress,
     pub wave_number: u32,
     pub gold: u32,
-    pub is_wave_active: bool,
     pub game_over: bool,
     pub victory: bool,
     pub next_tower_id: u32,
