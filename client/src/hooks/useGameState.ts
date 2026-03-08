@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeysClause, ToriiQueryBuilder } from '@dojoengine/sdk';
-import type { AccountInterface } from 'starknet';
 import { useDojoSDK } from '../dojo/DojoContext';
 import type { Factory, GameState, Tower } from '../dojo/models';
 
-export function useGameState(account: AccountInterface | null | undefined): {
+/**
+ * Subscribes to Torii for all game entities belonging to the given token_id.
+ * After EGS rekeying, models are keyed by token_id (felt252), not player address.
+ * For single-session-per-wallet mode, token_id == player address.
+ */
+export function useGameState(tokenId: string | null): {
   gameState: GameState | null;
   towers: Tower[];
   factories: Factory[];
@@ -14,15 +18,15 @@ export function useGameState(account: AccountInterface | null | undefined): {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [towers, setTowers] = useState<Tower[]>([]);
   const [factories, setFactories] = useState<Factory[]>([]);
-  const accountRef = useRef(account);
-  accountRef.current = account;
+  const tokenIdRef = useRef(tokenId);
+  tokenIdRef.current = tokenId;
 
   const handleEntities = useCallback((entities: unknown[]) => {
     const newTowers: Tower[] = [];
     const newFactories: Factory[] = [];
 
-    for (const entity of entities as Array<{ models?: { di?: { GameState?: GameState; Tower?: Tower; Factory?: Factory } } }>) {
-      const models = entity.models?.di;
+    for (const entity of entities as Array<{ models?: { td?: { GameState?: GameState; Tower?: Tower; Factory?: Factory } } }>) {
+      const models = entity.models?.td;
       if (!models) continue;
 
       if (models.GameState) {
@@ -33,12 +37,12 @@ export function useGameState(account: AccountInterface | null | undefined): {
       if (models.Factory) newFactories.push(models.Factory);
     }
 
-    if (newTowers.length) setTowers((prev) => mergeById(prev, newTowers, 'tower_id'));
-    if (newFactories.length) setFactories((prev) => mergeById(prev, newFactories, 'factory_id'));
+    if (newTowers.length) setTowers((prev) => mergeById(prev, newTowers, 'tower_id') as Tower[]);
+    if (newFactories.length) setFactories((prev) => mergeById(prev, newFactories, 'factory_id') as Factory[]);
   }, []);
 
   useEffect(() => {
-    if (!account || !sdk) return;
+    if (!tokenId || !sdk) return;
 
     let subscription: { cancel: () => void } | null = null;
 
@@ -46,8 +50,8 @@ export function useGameState(account: AccountInterface | null | undefined): {
       const [initialEntities, sub] = await sdk.subscribeEntityQuery({
         query: new ToriiQueryBuilder().withClause(
           KeysClause(
-            ['di-GameState', 'di-Tower', 'di-Factory'],
-            [account.address],
+            ['td-GameState', 'td-Tower', 'td-Factory'],
+            [tokenId],
             'VariableLen',
           ).build(),
         ),
@@ -67,23 +71,24 @@ export function useGameState(account: AccountInterface | null | undefined): {
     return () => {
       subscription?.cancel();
     };
-  }, [account, sdk, handleEntities]);
+  }, [tokenId, sdk, handleEntities]);
 
   const refreshGameState = useCallback(async () => {
-    const acct = accountRef.current;
-    if (!acct || !sdk) return;
+    const tid = tokenIdRef.current;
+    if (!tid || !sdk) return;
     try {
       const result = await sdk.getEntities({
         query: new ToriiQueryBuilder().withClause(
           KeysClause(
-            ['di-GameState', 'di-Tower', 'di-Factory'],
-            [acct.address],
+            ['td-GameState', 'td-Tower', 'td-Factory'],
+            [tid],
             'VariableLen',
           ).build(),
         ),
       });
       console.log('[Torii] poll result:', result);
-      if (result?.items?.length) handleEntities(result.items as unknown[]);
+      const items = (result as unknown as { items?: unknown[] })?.items;
+      if (items?.length) handleEntities(items);
     } catch (e) {
       console.error('[Torii] poll error:', e);
     }
@@ -92,11 +97,7 @@ export function useGameState(account: AccountInterface | null | undefined): {
   return { gameState, towers, factories, refreshGameState };
 }
 
-function mergeById<T extends Record<string, unknown>>(
-  prev: T[],
-  incoming: T[],
-  idKey: keyof T,
-): T[] {
+function mergeById<T>(prev: T[], incoming: T[], idKey: keyof T): unknown[] {
   const map = new Map(prev.map((x) => [x[idKey], x]));
   for (const item of incoming) map.set(item[idKey], item);
   return Array.from(map.values());

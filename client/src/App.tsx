@@ -93,8 +93,13 @@ interface PendingReplay {
 const EMPTY_STATS: GameStats = { totalKills: 0, totalGoldEarned: 0, totalBaseDamage: 0, wavesCompleted: 0 };
 
 export default function App({ account, manifest }: AppProps) {
-  const { gameState, towers, factories, refreshGameState } = useGameState(account);
-  const actions = useActions(account, manifest);
+  // token_id is the EGS session key. For single-session-per-wallet mode it equals
+  // the player's address (set when new_game is called). A future Denshokan mint
+  // flow would set this to the minted NFT token_id instead.
+  const tokenId = account?.address ?? null;
+
+  const { gameState, towers, factories, refreshGameState } = useGameState(tokenId);
+  const actions = useActions(account, manifest, tokenId);
   const { provider } = useProvider();
   const sfx = useSFX();
   const { unlock, toasts: achievementToasts } = useAchievements();

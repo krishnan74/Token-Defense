@@ -4,9 +4,9 @@ const contracts = manifest.contracts;
 const addr = (tag: string): string | undefined =>
   contracts.find((c: { tag: string }) => c.tag === tag)?.address;
 
-const gameContract     = addr('di-game_system');
-const buildingContract = addr('di-building_system');
-const waveContract     = addr('di-wave_system');
+const gameContract     = addr('td-game_system');
+const buildingContract = addr('td-building_system');
+const waveContract     = addr('td-wave_system');
 
 const controllerOpts = {
   chains: [{ rpcUrl: 'https://api.cartridge.gg/x/starknet/sepolia' }],

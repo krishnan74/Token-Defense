@@ -1,7 +1,9 @@
 // On-chain model types — mirrors contracts/src/models.cairo exactly.
+// Models are now keyed by token_id (felt252) for EGS compatibility.
 
 export interface GameState {
-  player: string;
+  token_id: string;   // EGS session key (felt252)
+  player: string;     // wallet that initialised the session
   wave_number: number;
   gold: number;
   game_over: boolean;
@@ -17,7 +19,7 @@ export interface GameState {
 }
 
 export interface Tower {
-  player: string;
+  token_id: string;   // EGS session key
   tower_id: number;
   tower_type: number; // 0=GPT, 1=Vision, 2=Code
   x: number;
@@ -29,7 +31,7 @@ export interface Tower {
 }
 
 export interface Factory {
-  player: string;
+  token_id: string;   // EGS session key
   factory_id: number;
   factory_type: number; // 0=Input, 1=Image, 2=Code
   x: number;

@@ -6,6 +6,7 @@ import type { ManifestContract } from '../dojo/models';
 export function useActions(
   account: AccountInterface | null | undefined,
   manifest: { contracts: ManifestContract[] } | null,
+  tokenId: string | null,
 ) {
   const accountRef = useRef<AccountInterface | null | undefined>(account);
   accountRef.current = account;
@@ -27,23 +28,29 @@ export function useActions(
     return tx;
   }
 
-  return {
-    newGame: (difficulty: number) => call(addresses.game, 'new_game', [difficulty]),
+  const tid = tokenId ?? '0x0';
 
-    activateOverclock: () => call(addresses.game, 'activate_overclock'),
+  return {
+    /** Initialise a new game session. token_id = player address for single-session-per-wallet mode. */
+    newGame: (difficulty: number) =>
+      call(addresses.game, 'new_game', [tid, difficulty]),
+
+    activateOverclock: () =>
+      call(addresses.game, 'activate_overclock', [tid]),
 
     placeTower: (towerType: number, x: number, y: number) =>
-      call(addresses.building, 'place_tower', [towerType, x, y]),
+      call(addresses.building, 'place_tower', [tid, towerType, x, y]),
 
     placeFactory: (factoryType: number, x: number, y: number) =>
-      call(addresses.building, 'place_factory', [factoryType, x, y]),
+      call(addresses.building, 'place_factory', [tid, factoryType, x, y]),
 
     upgradeFactory: (factoryId: number | string) =>
-      call(addresses.building, 'upgrade_factory', [factoryId as number]),
+      call(addresses.building, 'upgrade_factory', [tid, factoryId as number]),
 
     upgradeTower: (towerId: number | string) =>
-      call(addresses.building, 'upgrade_tower', [towerId as number]),
+      call(addresses.building, 'upgrade_tower', [tid, towerId as number]),
 
-    startWave: () => call(addresses.wave, 'start_wave'),
+    startWave: () =>
+      call(addresses.wave, 'start_wave', [tid]),
   };
 }

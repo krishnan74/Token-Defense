@@ -8,9 +8,9 @@ export function buildContractAddresses(
 ): ContractAddresses {
   const addr = (tag: string) => contracts.find((c) => c.tag === tag)?.address ?? '';
   return {
-    game: addr('di-game_system'),
-    building: addr('di-building_system'),
-    wave: addr('di-wave_system'),
+    game: addr('td-game_system'),
+    building: addr('td-building_system'),
+    wave: addr('td-wave_system'),
   };
 }
 
