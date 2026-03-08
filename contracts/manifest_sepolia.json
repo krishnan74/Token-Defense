@@ -34,7 +34,7 @@
   "contracts": [
     {
       "address": "0x6dbe32636a5775508a95b6d1c2c47d0a02698be40fd58ba94cc9cb3e4cff377",
-      "class_hash": "0x37404d8ef3b7a0810226ca645d4b8e9a99f8210f42d8348b1a3eb209ac91f3e",
+      "class_hash": "0x146c1df92f9db5755790a7c304d38e3c2ca23cb48c7f22bb8734ad57dcb31e6",
       "init_calldata": [],
       "tag": "di-building_system",
       "selector": "0x2aa8fcc21e02a2df7334b785cda63fde60c5636a35624b7825475d20f72e8fa",
@@ -42,23 +42,25 @@
         "place_tower",
         "place_factory",
         "upgrade_factory",
+        "upgrade_tower",
         "upgrade"
       ]
     },
     {
       "address": "0x3e5dbf1cd120b8b13400e19822f17af486729d5992a874c93338114e29b37df",
-      "class_hash": "0x5d8763b70d6e00f247c717264be9fcc71e542f214813b85dd80057af56bc37b",
+      "class_hash": "0x45c66fe78d8ea4f22bd72deb6bc0406fdb49c2324968deed8342a537a5c0f13",
       "init_calldata": [],
       "tag": "di-game_system",
       "selector": "0x17ae3d72e533c01e49888b63e252bc36a8f2aa7d4c77ba0bd0d522164259673",
       "systems": [
         "new_game",
+        "activate_overclock",
         "upgrade"
       ]
     },
     {
       "address": "0x19769fe60733c1eea52f81ad367ad51b2329576032489f44f3d9972e82ee0bc",
-      "class_hash": "0x35cf7be58b20608c33c8902656bb2d9569d5c0b5ace4e9864637419af9c7ad3",
+      "class_hash": "0x7e3e5e9441c8f045506d66e9f2ba1fadb2ce626809ae33b2927217f82a607c4",
       "init_calldata": [],
       "tag": "di-wave_system",
       "selector": "0x2327027e692be18fb4f0748d22913dc03a9fd35a5712d78033d792e4db2327c",
@@ -168,9 +170,19 @@
           "name": "base_health",
           "type": "core::integer::u32",
           "key": false
+        },
+        {
+          "name": "difficulty",
+          "type": "core::integer::u32",
+          "key": false
+        },
+        {
+          "name": "overclock_used",
+          "type": "core::bool",
+          "key": false
         }
       ],
-      "class_hash": "0x6d35f0d11e467f86bd2112ad60070f6c86b112c2d709b183d2ff125885cb77",
+      "class_hash": "0x4e14f2a885fc3b2006016f829265d6ad064efc986b0a2faaa070bab5b3ef2f9",
       "tag": "di-GameState",
       "selector": "0x520c18d6619456798fbcb4ba5476d0480a79a9c6ae1948f8a119bf0b4c10ac7"
     },
@@ -215,9 +227,14 @@
           "name": "is_alive",
           "type": "core::bool",
           "key": false
+        },
+        {
+          "name": "level",
+          "type": "core::integer::u32",
+          "key": false
         }
       ],
-      "class_hash": "0x4077740c4fe27a95afb59b2d9d5b8e1bbb42751d3b4b6192384553823eb54b3",
+      "class_hash": "0x2628bbf2ac34e4374ff3e3565e5f2f6f46d67a3f3f39896084e801118919f08",
       "tag": "di-Tower",
       "selector": "0x1d6817c625121ea236f7a90b170202adec21813a5359735d6c278f6f7eb5442"
     }
@@ -2112,6 +2129,14 @@
         {
           "name": "base_health",
           "type": "core::integer::u32"
+        },
+        {
+          "name": "difficulty",
+          "type": "core::integer::u32"
+        },
+        {
+          "name": "overclock_used",
+          "type": "core::bool"
         }
       ]
     },
@@ -2158,6 +2183,14 @@
         {
           "name": "base_health",
           "type": "core::integer::u32"
+        },
+        {
+          "name": "difficulty",
+          "type": "core::integer::u32"
+        },
+        {
+          "name": "overclock_used",
+          "type": "core::bool"
         }
       ]
     },
@@ -2196,6 +2229,10 @@
         {
           "name": "is_alive",
           "type": "core::bool"
+        },
+        {
+          "name": "level",
+          "type": "core::integer::u32"
         }
       ]
     },
@@ -2226,6 +2263,10 @@
         {
           "name": "is_alive",
           "type": "core::bool"
+        },
+        {
+          "name": "level",
+          "type": "core::integer::u32"
         }
       ]
     },
@@ -2302,6 +2343,18 @@
           ],
           "outputs": [],
           "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "upgrade_tower",
+          "inputs": [
+            {
+              "name": "tower_id",
+              "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
         }
       ]
     },
@@ -2329,6 +2382,18 @@
         {
           "type": "function",
           "name": "new_game",
+          "inputs": [
+            {
+              "name": "difficulty",
+              "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "activate_overclock",
           "inputs": [],
           "outputs": [],
           "state_mutability": "external"

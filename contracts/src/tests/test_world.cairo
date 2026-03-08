@@ -18,7 +18,8 @@ mod tests {
     use dojo_intro::constants::{
         INIT_GOLD, INIT_INPUT_TOKENS, INIT_IMAGE_TOKENS, INIT_CODE_TOKENS, BASE_MAX_HP,
         UPGRADE_COST, INPUT_FACTORY_COST, GPT_MAX_HP, WAVE_GOLD_BASE, WAVE_GOLD_PER_WAVE,
-        TJ_GOLD, TJ_BASE_DAMAGE, INPUT_TOKENS_BASE,
+        TJ_GOLD, TJ_BASE_DAMAGE, INPUT_TOKENS_BASE, MAX_TOKEN_BALANCE, tower_upgrade_cost,
+        OVERCLOCK_COST,
     };
 
     // ── World setup ───────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, _) = setup();
-        game.new_game();
+        game.new_game(1);
 
         let state: GameState = world.read_model(player);
         assert(state.gold == INIT_GOLD, 'wrong initial gold');
@@ -99,10 +100,10 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_tower(0, 3, 3);
 
-        game.new_game();
+        game.new_game(1);
 
         let state: GameState = world.read_model(player);
         assert(state.next_tower_id == 0, 'tower id should reset');
@@ -117,7 +118,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_tower(0, 3, 2);
 
         let tower: Tower = world.read_model((player, 0_u32));
@@ -135,7 +136,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_tower(0, 1, 1);
         building.place_tower(1, 2, 2);
 
@@ -154,7 +155,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_factory(0, 4, 4);
 
         let state: GameState = world.read_model(player);
@@ -167,7 +168,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_factory(1, 5, 5);
 
         let factory: Factory = world.read_model((player, 0_u32));
@@ -185,7 +186,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (_, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         // Image factory costs 200g; starts with 200g
         building.place_factory(1, 1, 1);
         building.place_factory(1, 2, 2); // 0g left → panic
@@ -197,7 +198,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_factory(0, 3, 3);
         building.upgrade_factory(0);
 
@@ -215,7 +216,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, _) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_factory(0, 3, 3);
 
         let mut state: GameState = world.read_model(player);
@@ -250,7 +251,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
         // No towers: all 6 TJ reach base → base_damage = 6×1 = 6
         wave.start_wave();
 
@@ -271,7 +272,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, wave) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_tower(0, 9, 1);
         wave.start_wave();
 
@@ -291,7 +292,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, wave) = setup();
-        game.new_game();
+        game.new_game(1);
         building.place_tower(0, 9, 1);
         building.place_factory(0, 4, 4); // +30 input/wave → max=80
         wave.start_wave();
@@ -310,7 +311,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
         wave.start_wave();
 
         let state: GameState = world.read_model(player);
@@ -324,7 +325,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
 
         // Set base_health to exactly wave-1 max damage (6) so it's destroyed
         let mut state: GameState = world.read_model(player);
@@ -345,7 +346,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
 
         // Fast-forward to wave 9 with very high base_health so base survives wave 10
         let mut state: GameState = world.read_model(player);
@@ -367,7 +368,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, wave) = setup();
-        game.new_game();
+        game.new_game(1);
         // Input factory level 1: +30 tokens/wave → max_input = 50 + 30 = 80
         building.place_factory(0, 4, 4);
         // No towers → no consumption
@@ -384,7 +385,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
 
         // Fast-forward to wave 4 to test non-trivial bonus
         let mut state: GameState = world.read_model(player);
@@ -409,7 +410,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
 
         let mut state: GameState = world.read_model(player);
         state.game_over = true;
@@ -425,7 +426,7 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
 
         let mut state: GameState = world.read_model(player);
         state.victory = true;
@@ -441,12 +442,184 @@ mod tests {
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, _, wave) = setup();
-        game.new_game();
+        game.new_game(1);
 
         let mut state: GameState = world.read_model(player);
         state.wave_number = 10;
         world.write_model_test(@state);
 
         wave.start_wave();
+    }
+
+    // ── New feature tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_difficulty_easy_gives_more_gold_and_hp() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, _, _) = setup();
+        game.new_game(0); // Easy
+
+        let state: GameState = world.read_model(player);
+        assert(state.gold == 300, 'easy gold should be 300');
+        assert(state.base_health == 30, 'easy hp should be 30');
+        assert(state.difficulty == 0, 'difficulty should be 0');
+        assert(!state.overclock_used, 'overclock should be false');
+    }
+
+    #[test]
+    fn test_difficulty_hard_gives_less_gold_and_hp() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, _, _) = setup();
+        game.new_game(2); // Hard
+
+        let state: GameState = world.read_model(player);
+        assert(state.gold == 120, 'hard gold should be 120');
+        assert(state.base_health == 10, 'hard hp should be 10');
+    }
+
+    #[test]
+    #[should_panic(expected: ('Invalid difficulty', 'ENTRYPOINT_FAILED',))]
+    fn test_difficulty_invalid_panics() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (_, game, _, _) = setup();
+        game.new_game(5); // invalid
+    }
+
+    #[test]
+    fn test_token_overflow_cap() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, building, wave) = setup();
+        game.new_game(1);
+
+        // Give enough factories to overflow the 150 cap.
+        // Manually set input_tokens near cap, add factory production.
+        let mut state: GameState = world.read_model(player);
+        state.input_tokens = 140;
+        world.write_model_test(@state);
+
+        building.place_factory(0, 4, 4); // +30/wave → 140+30 = 170 > 150 cap
+        wave.start_wave(); // no towers → all enemies through
+
+        let state: GameState = world.read_model(player);
+        // Tokens capped at 150, no towers consumed any, so still 150.
+        assert(state.input_tokens == MAX_TOKEN_BALANCE, 'tokens should be capped');
+    }
+
+    #[test]
+    fn test_upgrade_tower_increases_level() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, building, _) = setup();
+        game.new_game(0); // Easy: 300g
+
+        building.place_tower(0, 3, 2);
+        building.upgrade_tower(0); // costs 80g → 300-80 = 220
+
+        let tower: Tower = world.read_model((player, 0_u32));
+        assert(tower.level == 2, 'level should be 2');
+
+        let state: GameState = world.read_model(player);
+        assert(state.gold == 300 - tower_upgrade_cost(1), 'wrong gold after upgrade');
+    }
+
+    #[test]
+    #[should_panic(expected: ('Tower at max level', 'ENTRYPOINT_FAILED',))]
+    fn test_upgrade_tower_max_level_panics() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, building, _) = setup();
+        game.new_game(0); // Easy: 300g
+        building.place_tower(0, 3, 2);
+
+        // Set tower to level 3 directly.
+        let mut tower: Tower = world.read_model((player, 0_u32));
+        tower.level = 3;
+        world.write_model_test(@tower);
+
+        building.upgrade_tower(0); // should panic
+    }
+
+    #[test]
+    fn test_overclock_resets_after_wave() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, _, wave) = setup();
+        game.new_game(1);
+        game.activate_overclock();
+
+        let state: GameState = world.read_model(player);
+        assert(state.overclock_used, 'overclock should be set');
+
+        wave.start_wave();
+
+        let state: GameState = world.read_model(player);
+        assert(!state.overclock_used, 'overclock should reset');
+    }
+
+    #[test]
+    #[should_panic(expected: ('Overclock already used', 'ENTRYPOINT_FAILED',))]
+    fn test_overclock_double_use_panics() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (_, game, _, _) = setup();
+        game.new_game(1);
+        game.activate_overclock();
+        game.activate_overclock(); // should panic
+    }
+
+    #[test]
+    fn test_overclock_costs_gold() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, _, _) = setup();
+        game.new_game(1);
+        game.activate_overclock();
+
+        let state: GameState = world.read_model(player);
+        // Normal difficulty starts at 200 gold; overclock costs OVERCLOCK_COST
+        assert(state.gold == 200 - OVERCLOCK_COST, 'overclock should cost gold');
+    }
+
+    #[test]
+    #[should_panic(expected: ('Not enough gold', 'ENTRYPOINT_FAILED',))]
+    fn test_overclock_no_gold_panics() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, _, _) = setup();
+        game.new_game(1);
+
+        // Drain gold below OVERCLOCK_COST via direct model write
+        let mut state: GameState = world.read_model(player);
+        state.gold = 10;
+        world.write_model_test(@state);
+
+        game.activate_overclock(); // should panic: Not enough gold
+    }
+
+    #[test]
+    fn test_place_tower_has_level_1() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, building, _) = setup();
+        game.new_game(1);
+        building.place_tower(0, 3, 2);
+
+        let tower: Tower = world.read_model((player, 0_u32));
+        assert(tower.level == 1, 'new tower should be level 1');
     }
 }
