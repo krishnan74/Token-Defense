@@ -7,9 +7,9 @@ const MENU_TOWERS = [
 ];
 
 const MENU_ENEMIES = [
-  { label: '?!', name: 'TextJailbreak',   color: '#CC1111', dark: '#660000', text: '#FFB8B8', sz: 38, round: false, desc: 'Fast · 2g · 1 dmg'  },
-  { label: '∞',  name: 'ContextOverflow', color: '#8B4513', dark: '#4A1A00', text: '#FFD4A8', sz: 48, round: false, desc: 'Tough · 4g · 3 dmg' },
-  { label: '~',  name: 'HalluSwarm',      color: '#8800CC', dark: '#440066', text: '#E8B8FF', sz: 26, round: true,  desc: 'Swarm · 1g · 1 dmg' },
+  { label: '?!', name: 'TextJailbreak',   color: '#CC1111', dark: '#660000', text: '#FFB8B8', sz: 38, round: false, desc: 'Prompt injection · fast'  },
+  { label: '∞',  name: 'ContextOverflow', color: '#8B4513', dark: '#4A1A00', text: '#FFD4A8', sz: 48, round: false, desc: 'Context poisoning · armored' },
+  { label: '~',  name: 'HalluSwarm',      color: '#8800CC', dark: '#440066', text: '#E8B8FF', sz: 26, round: true,  desc: 'Hallucination cascade · swarm' },
 ];
 
 interface MenuScreenProps {
@@ -27,7 +27,7 @@ export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficult
         <div className="menu-title-block">
           <div className="menu-pixel-deco">◆ ◆ ◆</div>
           <h1 className="menu-title">TOKEN DEFENSE</h1>
-          <div className="menu-subtitle">Defend the AI base from prompt injection attacks</div>
+          <div className="menu-subtitle">An AI inference cluster under attack. You are the last line of defense.</div>
           <div className="menu-pixel-deco">◆ ◆ ◆</div>
         </div>
 
@@ -77,14 +77,14 @@ export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficult
         </div>
 
         <div className="menu-howto">
-          <span className="menu-howto-item">◆ Place towers on grass tiles</span>
-          <span className="menu-howto-item">◆ Build factories to generate tokens</span>
-          <span className="menu-howto-item">◆ Survive all 10 waves to win</span>
+          <span className="menu-howto-item">◆ Place safety towers on the grid</span>
+          <span className="menu-howto-item">◆ Build factories to sustain token output</span>
+          <span className="menu-howto-item">◆ Survive 10 waves of adversarial AI attacks</span>
         </div>
 
         {mode === 'connect' ? (
           <div className="menu-cta-block">
-            <div className="menu-cta-hint">Connect your Cartridge Controller to play</div>
+            <div className="menu-cta-hint">Connect to play · or run the agent script and let AI defend AI</div>
           </div>
         ) : (
           <div className="menu-difficulty-block">
@@ -117,7 +117,7 @@ export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficult
       </div>
 
       <div className="menu-footer">
-        TOKEN DEFENSE · Built on Dojo / StarkNet · 10 Waves · Survive them all
+        TOKEN DEFENSE · Built on Dojo / StarkNet · All state is onchain · Humans and agents welcome
       </div>
     </div>
   );

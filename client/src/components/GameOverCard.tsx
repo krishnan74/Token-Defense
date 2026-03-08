@@ -25,8 +25,12 @@ export default function GameOverCard({ gameOver, gameStats, difficulty, onPlayAg
         <div className="app-gameover-stats">
           Kills: {gameStats.totalKills} | Gold: {gameStats.totalGoldEarned} | Waves: {gameStats.wavesCompleted}
         </div>
-        <button className="app-gameover-btn" onClick={onPlayAgain}>
+        <button className="app-gameover-play-again-btn" onClick={onPlayAgain}>
           PLAY AGAIN
+        </button>
+
+        <button className="app-gameover-exit-btn" onClick={() => window.location.reload()}>
+          EXIT
         </button>
       </div>
     </div>
