@@ -8,3 +8,7 @@ deploy_sepolia.sh
 
 scarb --profile sepolia build
 sozo migrate --profile sepolia 
+
+slot deployments create token-defense torii --config torii.toml  
+slot deployments delete token-defense torii 
+slot deployments list
