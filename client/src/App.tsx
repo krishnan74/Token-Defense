@@ -15,9 +15,11 @@ import type { ConveyorTile } from './constants';
 import type { ManifestContract } from './dojo/models';
 import { useActions } from './hooks/useActions';
 import { useAchievements } from './hooks/useAchievements';
+import type { Achievement } from './hooks/useAchievements';
 import { useGameState } from './hooks/useGameState';
 import { useSFX } from './hooks/useSFX';
 import type { WaveSnapshot } from './simulation/WaveSimulator';
+import { WaveSimulator } from './simulation/WaveSimulator';
 import { WaveReplay } from './simulation/WaveReplay';
 
 interface AppProps {
@@ -113,6 +115,12 @@ export default function App({ account, manifest }: AppProps) {
 
   // Pre-wave snapshot (captured at click time, before the tx)
   const preWaveStateRef = useRef<typeof gameState>(null);
+  // Pre-wave base health — held until replay ends so sidebar doesn't jump during countdown
+  const preWaveBaseHealthRef = useRef<number>(BASE_MAX_HP);
+  // Client-side base health tracking (chain base_health is unreliable for small damage)
+  const clientBaseHealthRef = useRef<number>(BASE_MAX_HP);
+  const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
+  const clientBaseHealthInitRef = useRef(false);
   // Replay params + result, computed when chain confirms
   const pendingReplayRef = useRef<PendingReplay | null>(null);
 
@@ -125,6 +133,15 @@ export default function App({ account, manifest }: AppProps) {
   const [optimisticFactories, setOptimisticFactories] = useState<unknown[]>([]);
   const [optimisticGoldSpent, setOptimisticGoldSpent] = useState(0);
   const [upgradeOptimistic, setUpgradeOptimistic] = useState<UpgradeOptimistic>({ counts: {}, gold: 0 });
+
+  // ── Sync client base health from chain on first load (or new game) ────────
+  useEffect(() => {
+    if (gameState && !clientBaseHealthInitRef.current) {
+      clientBaseHealthInitRef.current = true;
+      clientBaseHealthRef.current = gameState.base_health ?? BASE_MAX_HP;
+      setClientBaseHealthDisplay(clientBaseHealthRef.current);
+    }
+  }, [gameState]);
 
   // ── Sound effects during wave replay ──────────────────────────────────────
   useEffect(() => {
@@ -224,12 +241,24 @@ export default function App({ account, manifest }: AppProps) {
     const completedWave = Number(gameState.wave_number);
     if (completedWave <= Number(pre.wave_number)) return; // not confirmed yet
 
-    // Chain confirmed — compute outcome from gold/health diff
+    // Chain confirmed — compute gold diff from chain, run fast sim for accurate base damage
     setIsWaitingWaveActive(false);
 
-    const goldEarned      = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
-    const baseDamageTaken = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
-    const waveBonus       = GOLD_PER_WAVE(completedWave);
+    const goldEarned = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
+    const waveBonus  = GOLD_PER_WAVE(completedWave);
+
+    // Run WaveSimulator synchronously (chain base_health is unreliable for small damage values)
+    const fastSim = new WaveSimulator({
+      towers: allTowers,
+      factories: allFactories,
+      gameState: { ...pre, base_health: clientBaseHealthRef.current },
+      waveNumber: completedWave,
+    });
+    const SIM_DT = 1 / 60;
+    while (!fastSim.done) fastSim.step(SIM_DT);
+    const baseDamageTaken = fastSim.baseDamage;
+    clientBaseHealthRef.current = Math.max(0, clientBaseHealthRef.current - baseDamageTaken);
+    setClientBaseHealthDisplay(clientBaseHealthRef.current);
     const killGold        = Math.max(0, goldEarned - waveBonus);
 
     const composition = WAVE_COMPOSITIONS[completedWave] ?? [];
@@ -251,7 +280,7 @@ export default function App({ account, manifest }: AppProps) {
       (killedCO ? (countByType['ContextOverflow'] ?? 0) : 0) +
       (killedHS ? (countByType['HalluSwarm']      ?? 0) : 0);
 
-    const baseHealthRemaining = gameState.base_health ?? BASE_MAX_HP;
+    const baseHealthRemaining = clientBaseHealthRef.current;
 
     // Stash everything for after the countdown
     pendingReplayRef.current = {
@@ -333,10 +362,15 @@ export default function App({ account, manifest }: AppProps) {
 
   const displayGold = (gameState?.gold ?? 0) - optimisticGoldSpent - upgradeOptimistic.gold;
 
-  // During replay, follow the animated base health so sidebar tracks the animation
+  // Base health display:
+  // - During waiting/countdown: show pre-wave value (chain already has new value, but replay hasn't played yet)
+  // - During replay: follow the live animated value from WaveReplay
+  // - Otherwise: show on-chain value
   const displayBaseHealth = isReplaying
-    ? (liveSnapshot?.baseHealth ?? (gameState?.base_health ?? BASE_MAX_HP))
-    : (gameState?.base_health ?? BASE_MAX_HP);
+    ? (liveSnapshot?.baseHealth ?? preWaveBaseHealthRef.current)
+    : (isWaitingWaveActive || countdown !== null)
+      ? preWaveBaseHealthRef.current
+      : clientBaseHealthDisplay;
 
   // ── Achievement checks ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -438,6 +472,7 @@ export default function App({ account, manifest }: AppProps) {
     setWaveResult(null);
     // Snapshot the CURRENT state before the tx changes anything
     preWaveStateRef.current = { ...gameState, gold: displayGold };
+    preWaveBaseHealthRef.current = clientBaseHealthRef.current;
     setIsWaitingWaveActive(true);
     sfx.playClick();
     actions.startWave().catch((e: unknown) => {
@@ -496,10 +531,11 @@ export default function App({ account, manifest }: AppProps) {
       ]);
       setOptimisticGoldSpent((prev) => prev + def.cost);
 
-      // Create conveyor to nearest alive tower
-      const tList = allTowers as Array<{ tower_id: string | number; x: number; y: number; is_alive?: boolean }>;
+      // Create conveyor to nearest alive tower of matching token type
+      // Factory type 0/1/2 maps to tower type 0/1/2 (same token index)
+      const tList = allTowers as Array<{ tower_id: string | number; x: number; y: number; is_alive?: boolean; tower_type?: number }>;
       const nearestT = tList
-        .filter((t) => t.is_alive !== false)
+        .filter((t) => t.is_alive !== false && Number(t.tower_type) === selectedBuild.id)
         .reduce<{ tower_id: string | number; x: number; y: number } | null>((best, t) => {
           const dx = Number(t.x) - col, dy = Number(t.y) - row;
           if (!best) return t;
@@ -547,6 +583,9 @@ export default function App({ account, manifest }: AppProps) {
           sfx.playClick();
           setIsStartingGame(true);
           setConveyors([]);
+          clientBaseHealthInitRef.current = false;
+          clientBaseHealthRef.current = BASE_MAX_HP;
+          setClientBaseHealthDisplay(BASE_MAX_HP);
           actions.newGame().catch((e) => {
             console.error(e);
             setIsStartingGame(false);
@@ -675,6 +714,9 @@ export default function App({ account, manifest }: AppProps) {
                 setGameOver(null);
                 setGameStats(EMPTY_STATS);
                 setConveyors([]);
+                clientBaseHealthInitRef.current = false;
+                clientBaseHealthRef.current = BASE_MAX_HP;
+                setClientBaseHealthDisplay(BASE_MAX_HP);
                 actions.newGame().catch(console.error);
               }}
             >
@@ -686,7 +728,7 @@ export default function App({ account, manifest }: AppProps) {
 
       {/* Achievement toasts */}
       <div className="app-toasts">
-        {achievementToasts.map((ach) => (
+        {achievementToasts.map((ach: Achievement) => (
           <div key={ach.id} className="app-achievement-toast">
             <div className="app-achievement-icon">★</div>
             <div>

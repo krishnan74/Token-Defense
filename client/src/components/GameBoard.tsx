@@ -64,12 +64,13 @@ function getTileColor(col: number, row: number): string {
 
 // ── Conveyor helpers ────────────────────────────────────────────────────────
 function findNearestTower(
-  col: number, row: number, towerList: unknown[],
+  col: number, row: number, towerList: unknown[], matchType?: number,
 ): { tower_id: string | number; x: number; y: number } | null {
   let best: { tower_id: string | number; x: number; y: number } | null = null;
   let bestDist = Infinity;
-  for (const t of towerList as Array<{ tower_id: string | number; x: number; y: number; is_alive?: boolean }>) {
+  for (const t of towerList as Array<{ tower_id: string | number; x: number; y: number; is_alive?: boolean; tower_type?: number }>) {
     if (t.is_alive === false) continue;
+    if (matchType !== undefined && Number(t.tower_type) !== matchType) continue;
     const dx = Number(t.x) - col, dy = Number(t.y) - row;
     const d = dx * dx + dy * dy;
     if (d < bestDist) { bestDist = d; best = t; }
@@ -462,7 +463,8 @@ export default function GameBoard({
 
             {/* Marching-ants link to nearest tower when hovering factory placement */}
             {hoveredCell && selectedBuild?.type === 'factory' && !isWaveActive && (() => {
-              const nearest = findNearestTower(hoveredCell.col, hoveredCell.row, towers);
+              // Only link to towers of matching token type (factory type index === tower type index)
+              const nearest = findNearestTower(hoveredCell.col, hoveredCell.row, towers, selectedBuild.id);
               if (!nearest) return null;
               const convColor = CONVEYOR_COLORS[selectedBuild.id] ?? '#888';
               const sx = (hoveredCell.col + 0.5) * CELL, sy = (hoveredCell.row + 0.5) * CELL;
