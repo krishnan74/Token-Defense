@@ -41,9 +41,10 @@ pub const INIT_CODE_TOKENS: u32 = 20;
 
 // ── Game config ───────────────────────────────────────────────────────────────
 pub const MAX_WAVES: u32 = 10;
-pub const BASE_MAX_HP: u32 = 20;
-pub const WAVE_GOLD_BASE: u32 = 50;
-pub const WAVE_GOLD_PER_WAVE: u32 = 10;
+pub const MAX_TOWERS: u32 = 14;       // max simultaneously placed towers
+pub const BASE_MAX_HP: u32 = 25;      // Normal difficulty default
+pub const WAVE_GOLD_BASE: u32 = 60;   // base gold rewarded after each wave
+pub const WAVE_GOLD_PER_WAVE: u32 = 15; // additional gold per wave number
 
 // ── Enemy constants ───────────────────────────────────────────────────────────
 // Types: 0=TextJailbreak, 1=ContextOverflow, 2=HalluSwarm, 3=Boss
@@ -52,7 +53,7 @@ pub const TJ_SPEED_X100: u32 = 150; // 1.5 tiles/s × 100
 pub const TJ_GOLD: u32 = 2;
 pub const TJ_BASE_DAMAGE: u32 = 1;
 
-pub const CO_HP: u32 = 35;
+pub const CO_HP: u32 = 28;
 pub const CO_SPEED_X100: u32 = 90;  // 0.9 tiles/s × 100
 pub const CO_GOLD: u32 = 4;
 pub const CO_BASE_DAMAGE: u32 = 3;
@@ -98,8 +99,8 @@ pub fn wave_enemy_counts(wave: u32) -> (u32, u32, u32, u32) {
         4  => (6,  2,  0,  0),
         5  => (7,  3,  0,  1),
         6  => (8,  4,  0,  0),
-        7  => (6,  3,  9,  0),
-        8  => (7,  3, 12,  0),
+        7  => (6,  3,  7,  0),
+        8  => (7,  3,  9,  0),
         9  => (8,  4, 15,  0),
         10 => (10, 5, 15,  1),
         _  => (10, 5, 15,  0),
@@ -147,10 +148,10 @@ pub fn difficulty_init_gold(d: u32) -> u32 {
 
 pub fn difficulty_base_hp(d: u32) -> u32 {
     match d {
-        0 => 30,  // Easy
-        1 => 20,  // Normal (= BASE_MAX_HP)
-        2 => 10,  // Hard
-        _ => 20,
+        0 => 35,  // Easy
+        1 => 25,  // Normal (= BASE_MAX_HP)
+        2 => 12,  // Hard
+        _ => 25,
     }
 }
 

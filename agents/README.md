@@ -105,7 +105,9 @@ All calls take `token_id` as the first argument. Use `starknet.js` or `starknet.
 |---|---|---|---|
 | Start a game | `game_system` | `new_game` | `[token_id, difficulty]` |
 | Place tower | `building_system` | `place_tower` | `[token_id, tower_type, x, y]` |
+| Sell tower | `building_system` | `sell_tower` | `[token_id, tower_id]` |
 | Place factory | `building_system` | `place_factory` | `[token_id, factory_type, x, y]` |
+| Sell factory | `building_system` | `sell_factory` | `[token_id, factory_id]` |
 | Upgrade factory | `building_system` | `upgrade_factory` | `[token_id, factory_id]` |
 | Start wave | `wave_system` | `start_wave` | `[token_id]` |
 
@@ -134,7 +136,7 @@ x=5: y ∈ [3,6]     (vertical turn)
 y=6: x ∈ [0,5]     (approach to base)
 ```
 
-**Towers** — free to place, limited by grid:
+**Towers** — free to place, max 14 active at once. Use `sell_tower` to free a slot:
 
 | Type | Name | HP | Damage | Token |
 |---|---|---|---|---|

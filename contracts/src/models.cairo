@@ -18,8 +18,9 @@ pub struct GameState {
     pub image_tokens: u32,
     pub code_tokens: u32,
     pub base_health: u32,
-    pub difficulty: u32,       // 0=Easy, 1=Normal, 2=Hard
-    pub overclock_used: bool,  // active ability: halves all tower cooldowns for one wave
+    pub difficulty: u32,        // 0=Easy, 1=Normal, 2=Hard
+    pub overclock_used: bool,   // active ability: halves all tower cooldowns for one wave
+    pub active_tower_count: u32, // number of currently placed (alive) towers
 }
 
 // Tower – keyed by (token_id, tower_id)

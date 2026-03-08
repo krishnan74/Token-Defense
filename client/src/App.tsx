@@ -237,6 +237,41 @@ export default function App({ account, manifest }: AppProps) {
     });
   }
 
+  function handleSellTower(id: number | string) {
+    sfx.playClick();
+    // Optimistically remove tower from list
+    setOptimisticTowers((prev) =>
+      (prev as Array<{ tower_id: string | number; is_alive?: boolean }>).map((t) =>
+        String(t.tower_id) === String(id) ? { ...t, is_alive: false } : t,
+      ),
+    );
+    actions.sellTower(id as number).catch((e: unknown) => {
+      console.error('sellTower failed:', e);
+      setOptimisticTowers((prev) =>
+        (prev as Array<{ tower_id: string | number; is_alive?: boolean }>).map((t) =>
+          String(t.tower_id) === String(id) ? { ...t, is_alive: true } : t,
+        ),
+      );
+    });
+  }
+
+  function handleSellFactory(id: number | string) {
+    sfx.playClick();
+    setOptimisticFactories((prev) =>
+      (prev as Array<{ factory_id: string | number; is_active?: boolean }>).map((f) =>
+        String(f.factory_id) === String(id) ? { ...f, is_active: false } : f,
+      ),
+    );
+    actions.sellFactory(id as number).catch((e: unknown) => {
+      console.error('sellFactory failed:', e);
+      setOptimisticFactories((prev) =>
+        (prev as Array<{ factory_id: string | number; is_active?: boolean }>).map((f) =>
+          String(f.factory_id) === String(id) ? { ...f, is_active: true } : f,
+        ),
+      );
+    });
+  }
+
   function handleActivateOverclock() {
     if (overclockPending || gameState?.overclock_used) return;
     sfx.playClick();
@@ -387,6 +422,8 @@ export default function App({ account, manifest }: AppProps) {
           gameState={displayGameState}
           onUpgrade={handleUpgrade}
           onUpgradeTower={handleUpgradeTower}
+          onSellTower={handleSellTower}
+          onSellFactory={handleSellFactory}
         />
       </div>
       <BuildMenu

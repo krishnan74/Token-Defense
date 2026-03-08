@@ -457,6 +457,7 @@ pub mod game_system {
                 base_health: difficulty_base_hp(difficulty),
                 difficulty,
                 overclock_used: false,
+                active_tower_count: 0,
             };
             world.write_model(@game_state);
             self.minigame.post_action(token_id);

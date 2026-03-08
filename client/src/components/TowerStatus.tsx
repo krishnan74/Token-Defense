@@ -1,4 +1,4 @@
-import { BASE_MAX_HP, FACTORIES, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp } from '../constants';
+import { BASE_MAX_HP, FACTORIES, MAX_TOWERS, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp } from '../constants';
 import type { Factory, Tower } from '../dojo/models';
 
 interface TowerStatusProps {
@@ -7,9 +7,12 @@ interface TowerStatusProps {
   gameState: { gold?: number; is_wave_active?: boolean; base_health?: number; difficulty?: number } | null;
   onUpgrade: (factoryId: number | string) => void;
   onUpgradeTower: (towerId: number | string) => void;
+  onSellTower: (towerId: number | string) => void;
+  onSellFactory: (factoryId: number | string) => void;
 }
 
-export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, gameState }: TowerStatusProps) {
+export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, gameState }: TowerStatusProps) {
+  const aliveTowerCount = (towers as Array<{ is_alive?: boolean }>).filter((t) => t.is_alive !== false).length;
   const maxHp     = getDifficultyBaseHp(gameState?.difficulty ?? 1);
   const baseHealth = gameState?.base_health ?? maxHp;
   const basePct    = maxHp > 0 ? baseHealth / maxHp : 0;
@@ -33,7 +36,10 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
       </div>
 
       {/* Towers */}
-      <div style={{ ...styles.sectionTitle, marginTop: 10 }}>TOWERS</div>
+      <div style={{ ...styles.sectionTitle, marginTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+        <span>TOWERS</span>
+        <span style={{ color: aliveTowerCount >= MAX_TOWERS ? '#D9534F' : '#6B3A1E' }}>{aliveTowerCount}/{MAX_TOWERS}</span>
+      </div>
       {towers.length === 0 && <div style={styles.empty}>NONE PLACED</div>}
       {(towers as Tower[]).map((t) => {
         const hp    = Number(t.health);
@@ -58,15 +64,26 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
               <div style={{ ...styles.hpFill, width: `${pct}%`, background: fillColor }} />
             </div>
             <div style={styles.sub}>{hp}/{maxHp} HP</div>
-            {alive && level < 3 && (
-              <button
-                style={{ ...styles.upgradeBtn, opacity: canUpgradeTower ? 1 : 0.4 }}
-                disabled={!canUpgradeTower}
-                onClick={() => onUpgradeTower(t.tower_id)}
-              >
-                ↑ UPGRADE ({upgCost}g)
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 4, marginTop: alive ? 0 : 4 }}>
+              {alive && level < 3 && (
+                <button
+                  style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgradeTower ? 1 : 0.4 }}
+                  disabled={!canUpgradeTower}
+                  onClick={() => onUpgradeTower(t.tower_id)}
+                >
+                  ↑ ({upgCost}g)
+                </button>
+              )}
+              {alive && !gameState?.is_wave_active && (
+                <button
+                  style={{ ...styles.sellBtn, flex: level < 3 ? '0 0 auto' : 1 }}
+                  onClick={() => onSellTower(t.tower_id)}
+                  title="Remove tower (free)"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
@@ -85,13 +102,24 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
               <span style={{ ...styles.badge, background: '#4A7A20', color: '#C6F6C6' }}>Lv{f.level}</span>
             </div>
             <div style={styles.sub}>{prod} tok/wave</div>
-            <button
-              style={{ ...styles.upgradeBtn, opacity: canUpgrade ? 1 : 0.4 }}
-              disabled={!canUpgrade}
-              onClick={() => onUpgrade(f.factory_id)}
-            >
-              ↑ UPGRADE (50g)
-            </button>
+            <div style={{ display: 'flex', gap: 4, marginTop: 0 }}>
+              <button
+                style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgrade ? 1 : 0.4 }}
+                disabled={!canUpgrade}
+                onClick={() => onUpgrade(f.factory_id)}
+              >
+                ↑ (50g)
+              </button>
+              {!gameState?.is_wave_active && (
+                <button
+                  style={{ ...styles.sellBtn, flex: '0 0 auto' }}
+                  onClick={() => onSellFactory(f.factory_id)}
+                  title={`Sell factory (refund ${def.cost / 2}g)`}
+                >
+                  ✕ {def.cost / 2}g
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
@@ -135,12 +163,21 @@ const styles = {
   hpFill:  { height: '100%', transition: 'width 0.3s' },
   sub: { fontFamily: "'VT323', monospace", color: '#6B3A1E', fontSize: 12 },
   upgradeBtn: {
-    marginTop: 5, padding: '3px 0', width: '100%',
+    marginTop: 5, padding: '3px 0',
     background: '#2A4A10', color: '#A8D8A8',
     border: '2px solid #3A6A18',
     borderRadius: 0, cursor: 'pointer',
     fontFamily: "'VT323', monospace", fontSize: 13, letterSpacing: 0.5,
     boxShadow: '2px 2px 0 #0A1A00',
+    transition: 'background 0.1s',
+  },
+  sellBtn: {
+    marginTop: 5, padding: '3px 6px',
+    background: '#4A1A0A', color: '#FF8080',
+    border: '2px solid #6A2A1A',
+    borderRadius: 0, cursor: 'pointer',
+    fontFamily: "'VT323', monospace", fontSize: 12,
+    boxShadow: '2px 2px 0 #1A0500',
     transition: 'background 0.1s',
   },
 };

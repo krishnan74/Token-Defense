@@ -13,6 +13,7 @@ function TokenDisplay({
   icon, label, value, color,
 }: { icon: string; label: string; value: number; color: string }) {
   const pct = value / MAX_TOKEN_BALANCE;
+  const atCap  = value >= MAX_TOKEN_BALANCE;
   const nearCap = pct >= 0.85;
   const displayColor = nearCap ? '#FFD700' : color;
   return (
@@ -21,6 +22,7 @@ function TokenDisplay({
       <span style={styles.label}>{label}</span>
       <span style={{ ...styles.value, color: displayColor }}>{value}</span>
       <span style={{ ...styles.cap, color: nearCap ? '#FFD700' : '#4A2510' }}>/{MAX_TOKEN_BALANCE}</span>
+      {atCap && <span style={styles.capWarning}>CAPPED</span>}
     </div>
   );
 }
@@ -74,4 +76,10 @@ const styles = {
     fontFamily: "'VT323', monospace", fontSize: 13,
   },
   divider: { width: 2, height: 24, background: '#4A2510', margin: '0 6px' },
+  capWarning: {
+    fontFamily: "'VT323', monospace", fontSize: 10,
+    color: '#FF4444', background: '#4A0000',
+    padding: '1px 4px', letterSpacing: 0.5,
+    border: '1px solid #6A0000', marginLeft: 2,
+  },
 };

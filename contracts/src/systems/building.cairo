@@ -4,6 +4,8 @@ pub trait IBuildingSystem<T> {
     fn place_factory(ref self: T, token_id: felt252, factory_type: u8, x: u32, y: u32);
     fn upgrade_factory(ref self: T, token_id: felt252, factory_id: u32);
     fn upgrade_tower(ref self: T, token_id: felt252, tower_id: u32);
+    fn sell_tower(ref self: T, token_id: felt252, tower_id: u32);
+    fn sell_factory(ref self: T, token_id: felt252, factory_id: u32);
 }
 
 #[dojo::contract]
@@ -12,7 +14,7 @@ pub mod building_system {
     use starknet::get_caller_address;
     use dojo::model::ModelStorage;
     use crate::models::{GameState, Tower, Factory};
-    use crate::constants::{UPGRADE_COST, tower_max_hp, factory_cost, tower_upgrade_cost, DENSHOKAN_ADDRESS};
+    use crate::constants::{UPGRADE_COST, MAX_TOWERS, tower_max_hp, factory_cost, tower_upgrade_cost, DENSHOKAN_ADDRESS};
     use game_components_embeddable_game_standard::minigame::minigame::{pre_action, post_action};
 
     #[abi(embed_v0)]
@@ -28,6 +30,7 @@ pub mod building_system {
             assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(tower_type <= 2, 'Invalid tower type');
+            assert(game.active_tower_count < MAX_TOWERS, 'Tower cap reached');
 
             let max_health = tower_max_hp(tower_type);
 
@@ -44,6 +47,7 @@ pub mod building_system {
             };
 
             game.next_tower_id += 1;
+            game.active_tower_count += 1;
             world.write_model(@tower);
             world.write_model(@game);
             post_action(denshokan, token_id);
@@ -127,6 +131,54 @@ pub mod building_system {
             tower.level += 1;
 
             world.write_model(@tower);
+            world.write_model(@game);
+            post_action(denshokan, token_id);
+        }
+
+        fn sell_tower(ref self: ContractState, token_id: felt252, tower_id: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
+            assert(!game.game_over, 'Game over');
+
+            let mut tower: Tower = world.read_model((token_id, tower_id));
+            assert(tower.is_alive, 'Tower not alive');
+
+            tower.is_alive = false;
+            if game.active_tower_count > 0 {
+                game.active_tower_count -= 1;
+            }
+
+            world.write_model(@tower);
+            world.write_model(@game);
+            post_action(denshokan, token_id);
+        }
+
+        fn sell_factory(ref self: ContractState, token_id: felt252, factory_id: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
+            assert(!game.game_over, 'Game over');
+
+            let mut factory: Factory = world.read_model((token_id, factory_id));
+            assert(factory.is_active, 'Factory not active');
+
+            // Refund 50% of base cost (ignores upgrade levels)
+            let refund = factory_cost(factory.factory_type) / 2;
+            game.gold += refund;
+            factory.is_active = false;
+
+            world.write_model(@factory);
             world.write_model(@game);
             post_action(denshokan, token_id);
         }

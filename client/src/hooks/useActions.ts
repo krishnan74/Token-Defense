@@ -53,6 +53,12 @@ export function useActions(
     upgradeTower: (towerId: number | string) =>
       call(addresses.building, 'upgrade_tower', [tid, towerId as number]),
 
+    sellTower: (towerId: number | string) =>
+      call(addresses.building, 'sell_tower', [tid, towerId as number]),
+
+    sellFactory: (factoryId: number | string) =>
+      call(addresses.building, 'sell_factory', [tid, factoryId as number]),
+
     startWave: () =>
       call(addresses.wave, 'start_wave', [tid]),
   };

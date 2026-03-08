@@ -34,7 +34,7 @@
   "contracts": [
     {
       "address": "0x2194878721f2ed30e4a5eebcbfa5fc1bcefd6ddb66d8eb319ef94ef5d72ea18",
-      "class_hash": "0xe63b63b92a9be314d856774b91b5b08af7474a88d5c94642542d2f0ebb8be1",
+      "class_hash": "0x30c53931c51bc48439b515d78efd181e8e7800ad82b6beedfc0285d6c45b23",
       "init_calldata": [],
       "tag": "td-building_system",
       "selector": "0x1dc9fd5061f947194027cc1d616788c6d3fb9a87b7a683d1da6fd0929f89305",
@@ -43,12 +43,14 @@
         "place_factory",
         "upgrade_factory",
         "upgrade_tower",
+        "sell_tower",
+        "sell_factory",
         "upgrade"
       ]
     },
     {
       "address": "0x6861bcd95eca8d269191997803114cc3efa298c2c277a3ed1f75ffdbfed34c1",
-      "class_hash": "0x3f65d116c58aa6781fada48e8b794ca6b1b050da5b9e7ebd4c4128ccdc32322",
+      "class_hash": "0x4191032e35878cfeb2c423c875e67c9f530c47e0a56df8a914d463007e5fd0d",
       "init_calldata": [],
       "tag": "td-game_system",
       "selector": "0x5181ca5c2a3ffae64a9316e77191f5182d81882d1589dbccff129ca3c48247c",
@@ -62,7 +64,7 @@
     },
     {
       "address": "0x719db1b998b8992871ed9019fabe798fc763c83eb9a14c231938779e52f8e50",
-      "class_hash": "0x6dbe18c8a09f044a116cd3bdb5c415df80b8c2746ff65b3b47906b2d31fd9ae",
+      "class_hash": "0x3062109d89285f8b1133b13af83d7e32d68110870ab3f4f05833f0fcb37d3ca",
       "init_calldata": [],
       "tag": "td-wave_system",
       "selector": "0x518ab3d320fb24ae95e1805f87cd6d1647c0e625e3f79df2d74c9cd1ffee7d3",
@@ -187,9 +189,14 @@
           "name": "overclock_used",
           "type": "core::bool",
           "key": false
+        },
+        {
+          "name": "active_tower_count",
+          "type": "core::integer::u32",
+          "key": false
         }
       ],
-      "class_hash": "0x6ea721fc85964267c8685eeb5a3d8dbc75775cfe20d09fdd32fc511648bba5c",
+      "class_hash": "0x7c87dbc0914279b14593b0b884a30fc226f9b04de468b749b36f97ce88eaf50",
       "tag": "td-GameState",
       "selector": "0x704f790bf4db3b2cafb9ac377c32b9a25a92787a526b6cea62d7d1a4f37738b"
     },
@@ -2940,6 +2947,10 @@
         {
           "name": "overclock_used",
           "type": "core::bool"
+        },
+        {
+          "name": "active_tower_count",
+          "type": "core::integer::u32"
         }
       ]
     },
@@ -2998,6 +3009,10 @@
         {
           "name": "overclock_used",
           "type": "core::bool"
+        },
+        {
+          "name": "active_tower_count",
+          "type": "core::integer::u32"
         }
       ]
     },
@@ -3173,6 +3188,38 @@
             },
             {
               "name": "tower_id",
+              "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "sell_tower",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
+            {
+              "name": "tower_id",
+              "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "sell_factory",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
+            {
+              "name": "factory_id",
               "type": "core::integer::u32"
             }
           ],

@@ -46,6 +46,7 @@ const isPath = (x, y) => PATH.has(`${x},${y}`);
 // factories to sustain token production, then upgrades.
 
 // All GPT (type 0) towers — cheapest to sustain with Input factories.
+// Max 14 towers can be placed simultaneously (contract cap).
 // Positions chosen to maximise path segment coverage (tower range = 3 tiles).
 const TOWER_PLAN = [
   { type: 0, x: 7,  y: 0 },   // covers y=1 entrance + y=3 segment

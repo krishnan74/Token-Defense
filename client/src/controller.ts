@@ -40,6 +40,8 @@ const controllerOpts = {
             { name: 'Place Factory',   entrypoint: 'place_factory',   description: 'Place a factory on the grid' },
             { name: 'Upgrade Factory', entrypoint: 'upgrade_factory', description: 'Upgrade a factory level' },
             { name: 'Upgrade Tower',   entrypoint: 'upgrade_tower',   description: 'Upgrade a tower level' },
+            { name: 'Sell Tower',      entrypoint: 'sell_tower',      description: 'Remove a tower from the grid' },
+            { name: 'Sell Factory',    entrypoint: 'sell_factory',    description: 'Remove a factory and refund 50% cost' },
           ],
         },
       }),
