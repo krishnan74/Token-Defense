@@ -1,9 +1,9 @@
 #[starknet::interface]
 pub trait IBuildingSystem<T> {
-    fn place_tower(ref self: T, tower_type: u8, x: u32, y: u32);
-    fn place_factory(ref self: T, factory_type: u8, x: u32, y: u32);
-    fn upgrade_factory(ref self: T, factory_id: u32);
-    fn upgrade_tower(ref self: T, tower_id: u32);
+    fn place_tower(ref self: T, token_id: felt252, tower_type: u8, x: u32, y: u32);
+    fn place_factory(ref self: T, token_id: felt252, factory_type: u8, x: u32, y: u32);
+    fn upgrade_factory(ref self: T, token_id: felt252, factory_id: u32);
+    fn upgrade_tower(ref self: T, token_id: felt252, tower_id: u32);
 }
 
 #[dojo::contract]
@@ -16,18 +16,19 @@ pub mod building_system {
 
     #[abi(embed_v0)]
     impl BuildingSystemImpl of IBuildingSystem<ContractState> {
-        fn place_tower(ref self: ContractState, tower_type: u8, x: u32, y: u32) {
+        fn place_tower(ref self: ContractState, token_id: felt252, tower_type: u8, x: u32, y: u32) {
             let mut world = self.world_default();
-            let player = get_caller_address();
+            let caller = get_caller_address();
 
-            let mut game: GameState = world.read_model(player);
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(tower_type <= 2, 'Invalid tower type');
 
             let max_health = tower_max_hp(tower_type);
 
             let tower = Tower {
-                player,
+                token_id,
                 tower_id: game.next_tower_id,
                 tower_type,
                 x,
@@ -43,11 +44,12 @@ pub mod building_system {
             world.write_model(@game);
         }
 
-        fn place_factory(ref self: ContractState, factory_type: u8, x: u32, y: u32) {
+        fn place_factory(ref self: ContractState, token_id: felt252, factory_type: u8, x: u32, y: u32) {
             let mut world = self.world_default();
-            let player = get_caller_address();
+            let caller = get_caller_address();
 
-            let mut game: GameState = world.read_model(player);
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(factory_type <= 2, 'Invalid factory type');
 
@@ -57,7 +59,7 @@ pub mod building_system {
             game.gold -= cost;
 
             let factory = Factory {
-                player,
+                token_id,
                 factory_id: game.next_factory_id,
                 factory_type,
                 x,
@@ -71,15 +73,16 @@ pub mod building_system {
             world.write_model(@game);
         }
 
-        fn upgrade_factory(ref self: ContractState, factory_id: u32) {
+        fn upgrade_factory(ref self: ContractState, token_id: felt252, factory_id: u32) {
             let mut world = self.world_default();
-            let player = get_caller_address();
+            let caller = get_caller_address();
 
-            let mut game: GameState = world.read_model(player);
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(game.gold >= UPGRADE_COST, 'Not enough gold');
 
-            let mut factory: Factory = world.read_model((player, factory_id));
+            let mut factory: Factory = world.read_model((token_id, factory_id));
             assert(factory.is_active, 'Factory not active');
 
             game.gold -= UPGRADE_COST;
@@ -89,14 +92,15 @@ pub mod building_system {
             world.write_model(@game);
         }
 
-        fn upgrade_tower(ref self: ContractState, tower_id: u32) {
+        fn upgrade_tower(ref self: ContractState, token_id: felt252, tower_id: u32) {
             let mut world = self.world_default();
-            let player = get_caller_address();
+            let caller = get_caller_address();
 
-            let mut game: GameState = world.read_model(player);
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
 
-            let mut tower: Tower = world.read_model((player, tower_id));
+            let mut tower: Tower = world.read_model((token_id, tower_id));
             assert(tower.is_alive, 'Tower not alive');
             assert(tower.level < 3, 'Tower at max level');
 
@@ -114,7 +118,7 @@ pub mod building_system {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"di")
+            self.world(@"td")
         }
     }
 }

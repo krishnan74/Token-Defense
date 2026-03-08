@@ -1,18 +1,18 @@
 [world]
-name = "Dojo intro"
-description = "A simple intro to Dojo."
-seed = "dojo_intro"
+name = "Token Defense"
+description = "A fully on-chain tower defense game on StarkNet. Defend your AI base from prompt injection attacks across 10 waves."
+seed = "token_defense_v2"
 
 [namespace]
-default = "di"
+default = "td"
 
 [env]
 rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
 account_address=  "0x0721834c557ce689176a2e66370585777ed82a916489dbe41d35acbe636cd55a"
 private_key = ""
-world_address = "0x06e075b911d34e634b432de21fb25bf402d70e7cba4d182a41927a75adff4965"
+world_address = "0x00eb557e9b07618914541ba7fef738708a70be9a842c921985618208902fb481"
 
 RUST_BACKTRACE=1
 
 [writers]
-"di" = ["di-game_system", "di-building_system", "di-wave_system"]
+"td" = ["td-game_system", "td-building_system", "td-wave_system"]

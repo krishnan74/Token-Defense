@@ -26,7 +26,7 @@ mod tests {
 
     fn namespace_def() -> NamespaceDef {
         NamespaceDef {
-            namespace: "di",
+            namespace: "td",
             resources: [
                 TestResource::Model(m_GameState::TEST_CLASS_HASH),
                 TestResource::Model(m_Tower::TEST_CLASS_HASH),
@@ -41,12 +41,12 @@ mod tests {
 
     fn contract_defs() -> Span<ContractDef> {
         [
-            ContractDefTrait::new(@"di", @"game_system")
-                .with_writer_of([dojo::utils::bytearray_hash(@"di")].span()),
-            ContractDefTrait::new(@"di", @"building_system")
-                .with_writer_of([dojo::utils::bytearray_hash(@"di")].span()),
-            ContractDefTrait::new(@"di", @"wave_system")
-                .with_writer_of([dojo::utils::bytearray_hash(@"di")].span()),
+            ContractDefTrait::new(@"td", @"game_system")
+                .with_writer_of([dojo::utils::bytearray_hash(@"td")].span()),
+            ContractDefTrait::new(@"td", @"building_system")
+                .with_writer_of([dojo::utils::bytearray_hash(@"td")].span()),
+            ContractDefTrait::new(@"td", @"wave_system")
+                .with_writer_of([dojo::utils::bytearray_hash(@"td")].span()),
         ]
             .span()
     }
@@ -80,10 +80,11 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, _) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.gold == INIT_GOLD, 'wrong initial gold');
         assert(state.base_health == BASE_MAX_HP, 'wrong base health');
         assert(state.wave_number == 0, 'wrong wave number');
@@ -99,13 +100,14 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_tower(0, 3, 3);
+        game.new_game(token_id, 1);
+        building.place_tower(token_id, 0, 3, 3);
 
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.next_tower_id == 0, 'tower id should reset');
         assert(state.gold == INIT_GOLD, 'gold should reset');
     }
@@ -117,11 +119,12 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_tower(0, 3, 2);
+        game.new_game(token_id, 1);
+        building.place_tower(token_id, 0, 3, 2);
 
-        let tower: Tower = world.read_model((player, 0_u32));
+        let tower: Tower = world.read_model((token_id, 0_u32));
         assert(tower.tower_type == 0, 'wrong tower type');
         assert(tower.x == 3, 'wrong x');
         assert(tower.y == 2, 'wrong y');
@@ -135,16 +138,17 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_tower(0, 1, 1);
-        building.place_tower(1, 2, 2);
+        game.new_game(token_id, 1);
+        building.place_tower(token_id, 0, 1, 1);
+        building.place_tower(token_id, 1, 2, 2);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.next_tower_id == 2, 'should have 2 towers');
 
-        let t1: Tower = world.read_model((player, 0_u32));
-        let t2: Tower = world.read_model((player, 1_u32));
+        let t1: Tower = world.read_model((token_id, 0_u32));
+        let t2: Tower = world.read_model((token_id, 1_u32));
         assert(t1.tower_type == 0, 'wrong type tower 0');
         assert(t2.tower_type == 1, 'wrong type tower 1');
     }
@@ -154,11 +158,12 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_factory(0, 4, 4);
+        game.new_game(token_id, 1);
+        building.place_factory(token_id, 0, 4, 4);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.gold == INIT_GOLD - INPUT_FACTORY_COST, 'wrong gold after factory');
     }
 
@@ -167,11 +172,12 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_factory(1, 5, 5);
+        game.new_game(token_id, 1);
+        building.place_factory(token_id, 1, 5, 5);
 
-        let factory: Factory = world.read_model((player, 0_u32));
+        let factory: Factory = world.read_model((token_id, 0_u32));
         assert(factory.factory_type == 1, 'wrong factory type');
         assert(factory.level == 1, 'wrong initial level');
         assert(factory.is_active, 'should be active');
@@ -185,11 +191,12 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (_, game, building, _) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
         // Image factory costs 200g; starts with 200g
-        building.place_factory(1, 1, 1);
-        building.place_factory(1, 2, 2); // 0g left → panic
+        building.place_factory(token_id, 1, 1, 1);
+        building.place_factory(token_id, 1, 2, 2); // 0g left → panic
     }
 
     #[test]
@@ -197,15 +204,16 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_factory(0, 3, 3);
-        building.upgrade_factory(0);
+        game.new_game(token_id, 1);
+        building.place_factory(token_id, 0, 3, 3);
+        building.upgrade_factory(token_id, 0);
 
-        let factory: Factory = world.read_model((player, 0_u32));
+        let factory: Factory = world.read_model((token_id, 0_u32));
         assert(factory.level == 2, 'level should be 2');
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.gold == INIT_GOLD - INPUT_FACTORY_COST - UPGRADE_COST, 'wrong gold');
     }
 
@@ -215,15 +223,16 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_factory(0, 3, 3);
+        game.new_game(token_id, 1);
+        building.place_factory(token_id, 0, 3, 3);
 
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.gold = 0;
         world.write_model_test(@state);
 
-        building.upgrade_factory(0);
+        building.upgrade_factory(token_id, 0);
     }
 
     // ── Wave system tests ─────────────────────────────────────────────────────
@@ -250,12 +259,13 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
         // No towers: all 6 TJ reach base → base_damage = 6×1 = 6
-        wave.start_wave();
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.wave_number == 1, 'wave should advance');
         assert(state.base_health == BASE_MAX_HP - 6, 'wrong base health');
         // kill_gold=0, wave_bonus=60 → gold = 200 + 60 = 260
@@ -271,12 +281,13 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, wave) = setup();
-        game.new_game(1);
-        building.place_tower(0, 9, 1);
-        wave.start_wave();
+        game.new_game(token_id, 1);
+        building.place_tower(token_id, 0, 9, 1);
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         // 4 killed, 2 survived → base takes 2 damage
         assert(state.base_health == BASE_MAX_HP - 2, 'wrong base health');
         // kill_gold=8, wave_bonus=60 → 200+8+60=268
@@ -291,13 +302,14 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, wave) = setup();
-        game.new_game(1);
-        building.place_tower(0, 9, 1);
-        building.place_factory(0, 4, 4); // +30 input/wave → max=80
-        wave.start_wave();
+        game.new_game(token_id, 1);
+        building.place_tower(token_id, 0, 9, 1);
+        building.place_factory(token_id, 0, 4, 4); // +30 input/wave → max=80
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         // All 6 TJ killed → no base damage
         assert(state.base_health == BASE_MAX_HP, 'base should be full');
         // kill_gold=12, wave_bonus=60, factory_cost=100 → 200-100+12+60=172
@@ -310,11 +322,12 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
-        wave.start_wave();
+        game.new_game(token_id, 1);
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.wave_number == 1, 'wave_number should be 1');
         assert(!state.victory, 'should not be victory yet');
     }
@@ -324,17 +337,18 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
         // Set base_health to exactly wave-1 max damage (6) so it's destroyed
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.base_health = 6;
         world.write_model_test(@state);
 
-        wave.start_wave(); // no towers → all 6 TJ reach base → 6 damage
+        wave.start_wave(token_id); // no towers → all 6 TJ reach base → 6 damage
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.base_health == 0, 'base should be 0');
         assert(state.game_over, 'game_over should be set');
         assert(!state.victory, 'should not be victory');
@@ -345,18 +359,19 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
         // Fast-forward to wave 9 with very high base_health so base survives wave 10
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.wave_number = 9;
         state.base_health = 200; // survive wave 10 max damage (40)
         world.write_model_test(@state);
 
-        wave.start_wave();
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.wave_number == 10, 'should be wave 10');
         assert(state.victory, 'should be victory');
         assert(!state.game_over, 'should not be game over');
@@ -367,14 +382,15 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
         // Input factory level 1: +30 tokens/wave → max_input = 50 + 30 = 80
-        building.place_factory(0, 4, 4);
+        building.place_factory(token_id, 0, 4, 4);
         // No towers → no consumption
-        wave.start_wave();
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         // input_tokens = 50 (carry) + 30 (prod) - 0 (consumed) = 80
         assert(state.input_tokens == INIT_INPUT_TOKENS + INPUT_TOKENS_BASE, 'wrong input tokens');
     }
@@ -384,17 +400,18 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
         // Fast-forward to wave 4 to test non-trivial bonus
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.wave_number = 4;
         world.write_model_test(@state);
 
-        wave.start_wave(); // wave 5 bonus = 50 + 5×10 = 100
+        wave.start_wave(token_id); // wave 5 bonus = 50 + 5×10 = 100
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         // wave 5: (7 TJ, 3 CO, 0 HS), no towers → all reach base
         // wave bonus = 50 + 5*10 = 100
         // kill_gold = 0
@@ -409,14 +426,15 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.game_over = true;
         world.write_model_test(@state);
 
-        wave.start_wave();
+        wave.start_wave(token_id);
     }
 
     #[test]
@@ -425,14 +443,15 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.victory = true;
         world.write_model_test(@state);
 
-        wave.start_wave();
+        wave.start_wave(token_id);
     }
 
     #[test]
@@ -441,14 +460,15 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.wave_number = 10;
         world.write_model_test(@state);
 
-        wave.start_wave();
+        wave.start_wave(token_id);
     }
 
     // ── New feature tests ─────────────────────────────────────────────────────
@@ -458,10 +478,11 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, _) = setup();
-        game.new_game(0); // Easy
+        game.new_game(token_id, 0); // Easy
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.gold == 300, 'easy gold should be 300');
         assert(state.base_health == 30, 'easy hp should be 30');
         assert(state.difficulty == 0, 'difficulty should be 0');
@@ -473,10 +494,11 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, _) = setup();
-        game.new_game(2); // Hard
+        game.new_game(token_id, 2); // Hard
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.gold == 120, 'hard gold should be 120');
         assert(state.base_health == 10, 'hard hp should be 10');
     }
@@ -487,8 +509,9 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (_, game, _, _) = setup();
-        game.new_game(5); // invalid
+        game.new_game(token_id, 5); // invalid
     }
 
     #[test]
@@ -496,19 +519,20 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, wave) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
         // Give enough factories to overflow the 150 cap.
         // Manually set input_tokens near cap, add factory production.
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.input_tokens = 140;
         world.write_model_test(@state);
 
-        building.place_factory(0, 4, 4); // +30/wave → 140+30 = 170 > 150 cap
-        wave.start_wave(); // no towers → all enemies through
+        building.place_factory(token_id, 0, 4, 4); // +30/wave → 140+30 = 170 > 150 cap
+        wave.start_wave(token_id); // no towers → all enemies through
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         // Tokens capped at 150, no towers consumed any, so still 150.
         assert(state.input_tokens == MAX_TOKEN_BALANCE, 'tokens should be capped');
     }
@@ -518,16 +542,17 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(0); // Easy: 300g
+        game.new_game(token_id, 0); // Easy: 300g
 
-        building.place_tower(0, 3, 2);
-        building.upgrade_tower(0); // costs 80g → 300-80 = 220
+        building.place_tower(token_id, 0, 3, 2);
+        building.upgrade_tower(token_id, 0); // costs 80g → 300-80 = 220
 
-        let tower: Tower = world.read_model((player, 0_u32));
+        let tower: Tower = world.read_model((token_id, 0_u32));
         assert(tower.level == 2, 'level should be 2');
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.gold == 300 - tower_upgrade_cost(1), 'wrong gold after upgrade');
     }
 
@@ -537,16 +562,17 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(0); // Easy: 300g
-        building.place_tower(0, 3, 2);
+        game.new_game(token_id, 0); // Easy: 300g
+        building.place_tower(token_id, 0, 3, 2);
 
         // Set tower to level 3 directly.
-        let mut tower: Tower = world.read_model((player, 0_u32));
+        let mut tower: Tower = world.read_model((token_id, 0_u32));
         tower.level = 3;
         world.write_model_test(@tower);
 
-        building.upgrade_tower(0); // should panic
+        building.upgrade_tower(token_id, 0); // should panic
     }
 
     #[test]
@@ -554,16 +580,17 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, wave) = setup();
-        game.new_game(1);
-        game.activate_overclock();
+        game.new_game(token_id, 1);
+        game.activate_overclock(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(state.overclock_used, 'overclock should be set');
 
-        wave.start_wave();
+        wave.start_wave(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         assert(!state.overclock_used, 'overclock should reset');
     }
 
@@ -573,10 +600,11 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (_, game, _, _) = setup();
-        game.new_game(1);
-        game.activate_overclock();
-        game.activate_overclock(); // should panic
+        game.new_game(token_id, 1);
+        game.activate_overclock(token_id);
+        game.activate_overclock(token_id); // should panic
     }
 
     #[test]
@@ -584,11 +612,12 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, _) = setup();
-        game.new_game(1);
-        game.activate_overclock();
+        game.new_game(token_id, 1);
+        game.activate_overclock(token_id);
 
-        let state: GameState = world.read_model(player);
+        let state: GameState = world.read_model(token_id);
         // Normal difficulty starts at 200 gold; overclock costs OVERCLOCK_COST
         assert(state.gold == 200 - OVERCLOCK_COST, 'overclock should cost gold');
     }
@@ -599,15 +628,16 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, _, _) = setup();
-        game.new_game(1);
+        game.new_game(token_id, 1);
 
         // Drain gold below OVERCLOCK_COST via direct model write
-        let mut state: GameState = world.read_model(player);
+        let mut state: GameState = world.read_model(token_id);
         state.gold = 10;
         world.write_model_test(@state);
 
-        game.activate_overclock(); // should panic: Not enough gold
+        game.activate_overclock(token_id); // should panic: Not enough gold
     }
 
     #[test]
@@ -615,11 +645,133 @@ mod tests {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
+        let token_id: felt252 = 1;
         let (mut world, game, building, _) = setup();
-        game.new_game(1);
-        building.place_tower(0, 3, 2);
+        game.new_game(token_id, 1);
+        building.place_tower(token_id, 0, 3, 2);
 
-        let tower: Tower = world.read_model((player, 0_u32));
+        let tower: Tower = world.read_model((token_id, 0_u32));
         assert(tower.level == 1, 'new tower should be level 1');
+    }
+
+    // ── EGS IMinigameTokenData tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_egs_score_increases_with_wave() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let token_id: felt252 = 1;
+        let (mut world, game, _, wave) = setup();
+        game.new_game(token_id, 1);
+
+        let score_0 = game.score(token_id);
+        assert(score_0 == BASE_MAX_HP.into(), 'score at wave 0 wrong');
+
+        wave.start_wave(token_id);
+
+        let score_1 = game.score(token_id);
+        // wave_number=1, base_health=BASE_MAX_HP-6 (6 TJ reach base, no towers)
+        let state: GameState = world.read_model(token_id);
+        let expected: u64 = (state.wave_number * 1000 + state.base_health).into();
+        assert(score_1 == expected, 'score after wave 1 wrong');
+        assert(score_1 > score_0, 'score should increase');
+    }
+
+    #[test]
+    fn test_egs_game_over_false_during_play() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let token_id: felt252 = 1;
+        let (_, game, _, _) = setup();
+        game.new_game(token_id, 1);
+
+        assert(!game.game_over(token_id), 'game_over should be false');
+    }
+
+    #[test]
+    fn test_egs_game_over_true_on_defeat() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let token_id: felt252 = 1;
+        let (mut world, game, _, wave) = setup();
+        game.new_game(token_id, 1);
+
+        let mut state: GameState = world.read_model(token_id);
+        state.base_health = 6; // exactly destroyed by wave 1 TJ
+        world.write_model_test(@state);
+
+        wave.start_wave(token_id);
+        assert(game.game_over(token_id), 'game_over should be true');
+    }
+
+    #[test]
+    fn test_egs_game_over_true_on_victory() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let token_id: felt252 = 1;
+        let (mut world, game, _, wave) = setup();
+        game.new_game(token_id, 1);
+
+        let mut state: GameState = world.read_model(token_id);
+        state.wave_number = 9;
+        state.base_health = 200;
+        world.write_model_test(@state);
+
+        wave.start_wave(token_id);
+        assert(game.game_over(token_id), 'victory should set game_over');
+    }
+
+    #[test]
+    fn test_egs_score_batch() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let token_a: felt252 = 100;
+        let token_b: felt252 = 200;
+        let (mut world, game, _, wave) = setup();
+
+        game.new_game(token_a, 1);
+        game.new_game(token_b, 1);
+
+        // Advance token_a one wave
+        let mut state_a: GameState = world.read_model(token_a);
+        state_a.wave_number = 3;
+        world.write_model_test(@state_a);
+
+        let ids: Span<felt252> = [token_a, token_b].span();
+        let scores = game.score_batch(ids);
+
+        // token_a: wave_number=3 * 1000 + base_health=20 = 3020
+        assert(*scores.at(0) == 3020_u64, 'batch score token_a wrong');
+        // token_b: wave_number=0 * 1000 + base_health=20 = 20
+        assert(*scores.at(1) == 20_u64, 'batch score token_b wrong');
+    }
+
+    #[test]
+    fn test_egs_game_over_batch() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let token_a: felt252 = 100;
+        let token_b: felt252 = 200;
+        let (mut world, game, _, _) = setup();
+
+        game.new_game(token_a, 1);
+        game.new_game(token_b, 1);
+
+        // Mark token_a as game over
+        let mut state_a: GameState = world.read_model(token_a);
+        state_a.game_over = true;
+        world.write_model_test(@state_a);
+
+        let ids: Span<felt252> = [token_a, token_b].span();
+        let results = game.game_over_batch(ids);
+
+        assert(*results.at(0), 'token_a should be game over');
+        assert(!*results.at(1), 'token_b should not be over');
     }
 }

@@ -11,8 +11,12 @@ dev = "./dev.sh"
 sierra-replace-ids = true
 
 [dependencies]
-starknet = "2.12.2"
+starknet = "2.15.2"
 dojo = "1.8.0"
+game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components", tag = "v1.1.0" }
+game_components_interfaces = { git = "https://github.com/Provable-Games/game-components", tag = "v1.1.0" }
+openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
+ 
 
 [profile.sepolia]
 # Sepolia profile configuration
@@ -28,3 +32,4 @@ build-external-contracts = ["dojo::world::world_contract::world"]
 [dev-dependencies]
 cairo_test = "2.12.2"
 dojo_cairo_test = "1.8.0"
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.55.0" }

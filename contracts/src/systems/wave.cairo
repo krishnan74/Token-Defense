@@ -1,12 +1,12 @@
 #[starknet::interface]
 pub trait IWaveSystem<T> {
-    fn start_wave(ref self: T);
+    fn start_wave(ref self: T, token_id: felt252);
 }
 
 #[dojo::contract]
 pub mod wave_system {
     use super::IWaveSystem;
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::get_caller_address;
     use dojo::model::ModelStorage;
     use core::num::traits::SaturatingSub;
     use crate::models::{GameState, Tower, Factory};
@@ -36,7 +36,7 @@ pub mod wave_system {
     #[derive(Drop, starknet::Event)]
     pub struct WaveResolved {
         #[key]
-        pub player: ContractAddress,
+        pub token_id: felt252,
         pub wave_number: u32,
         pub enemy_outcomes: u32,
         pub kill_gold: u32,
@@ -50,22 +50,23 @@ pub mod wave_system {
 
     #[abi(embed_v0)]
     impl WaveSystemImpl of IWaveSystem<ContractState> {
-        fn start_wave(ref self: ContractState) {
+        fn start_wave(ref self: ContractState, token_id: felt252) {
             let mut world = self.world_default();
-            let player = get_caller_address();
+            let caller = get_caller_address();
 
-            let mut game: GameState = world.read_model(player);
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(!game.victory, 'Already won');
             assert(game.wave_number < MAX_WAVES, 'Max waves reached');
 
             let (enemy_outcomes, kill_gold, base_damage, ic, imc, cc) =
-                resolve_wave(ref world, ref game, player);
+                resolve_wave(ref world, ref game, token_id);
 
             world.write_model(@game);
 
             self.emit(Event::WaveResolved(WaveResolved {
-                player,
+                token_id,
                 wave_number: game.wave_number,
                 enemy_outcomes,
                 kill_gold,
@@ -94,7 +95,7 @@ pub mod wave_system {
     fn resolve_wave(
         ref world: dojo::world::WorldStorage,
         ref game: GameState,
-        player: ContractAddress,
+        token_id: felt252,
     ) -> (u32, u32, u32, u32, u32, u32) {
         let wave = game.wave_number + 1;
         let (tj_count, co_count, hs_count, boss_count) = wave_enemy_counts(wave);
@@ -104,7 +105,7 @@ pub mod wave_system {
 
         // Compute token production and apply overflow cap.
         let (input_prod, image_prod, code_prod) =
-            compute_token_production(ref world, player, game.next_factory_id);
+            compute_token_production(ref world, token_id, game.next_factory_id);
 
         let raw_input = game.input_tokens + input_prod;
         let raw_image = game.image_tokens + image_prod;
@@ -136,7 +137,7 @@ pub mod wave_system {
             let hp  = apply_modifier_hp(TJ_HP, modifier, trait_);
             let spd = apply_modifier_spd(TJ_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
-                ref world, player, game.next_tower_id,
+                ref world, token_id, game.next_tower_id,
                 hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
@@ -161,7 +162,7 @@ pub mod wave_system {
             let hp  = apply_modifier_hp(CO_HP, modifier, trait_);
             let spd = apply_modifier_spd(CO_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
-                ref world, player, game.next_tower_id,
+                ref world, token_id, game.next_tower_id,
                 hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
@@ -186,7 +187,7 @@ pub mod wave_system {
             let hp  = apply_modifier_hp(HS_HP, modifier, trait_);
             let spd = apply_modifier_spd(HS_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
-                ref world, player, game.next_tower_id,
+                ref world, token_id, game.next_tower_id,
                 hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
@@ -210,7 +211,7 @@ pub mod wave_system {
             let hp  = apply_modifier_hp(BOSS_HP, modifier, 0);  // no trait for boss
             let spd = apply_modifier_spd(BOSS_SPEED_X100, modifier, 0);
             let (killed, ni, nim, nc) = process_enemy(
-                ref world, player, game.next_tower_id,
+                ref world, token_id, game.next_tower_id,
                 hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
@@ -257,7 +258,7 @@ pub mod wave_system {
 
     fn process_enemy(
         ref world: dojo::world::WorldStorage,
-        player: ContractAddress,
+        token_id: felt252,
         next_tower_id: u32,
         enemy_hp: u32,
         speed_x100: u32,
@@ -273,7 +274,7 @@ pub mod wave_system {
         let mut tid: u32 = 0;
         loop {
             if tid >= next_tower_id { break; }
-            let tower: Tower = world.read_model((player, tid));
+            let tower: Tower = world.read_model((token_id, tid));
             if tower.is_alive {
                 let covered = count_path_cells_covered(tower.x, tower.y);
                 if covered > 0 {
@@ -294,7 +295,7 @@ pub mod wave_system {
 
                     // Synergy: +20 dmg_mult if adjacent tower of different type exists.
                     let synergy = has_synergy_neighbor(
-                        ref world, player, tower.x, tower.y, tower.tower_type, next_tower_id, tid,
+                        ref world, token_id, tower.x, tower.y, tower.tower_type, next_tower_id, tid,
                     );
                     let eff_dmg_mult = if synergy { dmg_mult + 20 } else { dmg_mult };
 
@@ -331,7 +332,7 @@ pub mod wave_system {
 
     fn has_synergy_neighbor(
         ref world: dojo::world::WorldStorage,
-        player: ContractAddress,
+        token_id: felt252,
         tx: u32, ty: u32,
         ttype: u8,
         next_tower_id: u32,
@@ -342,7 +343,7 @@ pub mod wave_system {
         loop {
             if tid >= next_tower_id || found { break; }
             if tid != self_id {
-                let other: Tower = world.read_model((player, tid));
+                let other: Tower = world.read_model((token_id, tid));
                 if other.is_alive && other.tower_type != ttype {
                     let dx = if other.x >= tx { other.x - tx } else { tx - other.x };
                     let dy = if other.y >= ty { other.y - ty } else { ty - other.y };
@@ -386,7 +387,7 @@ pub mod wave_system {
 
     fn compute_token_production(
         ref world: dojo::world::WorldStorage,
-        player: ContractAddress,
+        token_id: felt252,
         next_factory_id: u32,
     ) -> (u32, u32, u32) {
         let mut fid: u32 = 0;
@@ -396,7 +397,7 @@ pub mod wave_system {
 
         loop {
             if fid >= next_factory_id { break; }
-            let factory: Factory = world.read_model((player, fid));
+            let factory: Factory = world.read_model((token_id, fid));
             if factory.is_active {
                 let base = factory_base_output(factory.factory_type);
                 let prod = base + base * (factory.level - 1) / 2;
@@ -417,7 +418,7 @@ pub mod wave_system {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"di")
+            self.world(@"td")
         }
     }
 }

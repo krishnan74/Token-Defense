@@ -4,7 +4,7 @@ description = "A simple intro to Dojo."
 seed = "dojo_intro"
 
 [namespace]
-default = "di"
+default = "td"
 
 [env]
 
@@ -21,4 +21,4 @@ private_key = ""
 RUST_BACKTRACE=1
 
 [writers]
-"di" = ["di-game_system", "di-building_system", "di-wave_system"]
+"td" = ["td-game_system", "td-building_system", "td-wave_system"]

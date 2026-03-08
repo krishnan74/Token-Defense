@@ -1,9 +1,9 @@
 {
   "world": {
     "class_hash": "0x719a487386c83521263c65f00336ef833ec738fc980fd755f9b641cf6b93f40",
-    "address": "0x6e075b911d34e634b432de21fb25bf402d70e7cba4d182a41927a75adff4965",
-    "seed": "dojo_intro",
-    "name": "Dojo intro",
+    "address": "0xeb557e9b07618914541ba7fef738708a70be9a842c921985618208902fb481",
+    "seed": "token_defense_v2",
+    "name": "Token Defense",
     "entrypoints": [
       "uuid",
       "set_metadata",
@@ -33,11 +33,11 @@
   },
   "contracts": [
     {
-      "address": "0x6dbe32636a5775508a95b6d1c2c47d0a02698be40fd58ba94cc9cb3e4cff377",
-      "class_hash": "0x146c1df92f9db5755790a7c304d38e3c2ca23cb48c7f22bb8734ad57dcb31e6",
+      "address": "0xd4a4c2d21088e19286e1d5c0711d063c2246e42ded194ab4315d46765c6789",
+      "class_hash": "0x6887f04c56904000f0524974c3846d668174c4d6091f5082fe530c8a2b4aec5",
       "init_calldata": [],
-      "tag": "di-building_system",
-      "selector": "0x2aa8fcc21e02a2df7334b785cda63fde60c5636a35624b7825475d20f72e8fa",
+      "tag": "td-building_system",
+      "selector": "0x1dc9fd5061f947194027cc1d616788c6d3fb9a87b7a683d1da6fd0929f89305",
       "systems": [
         "place_tower",
         "place_factory",
@@ -47,11 +47,11 @@
       ]
     },
     {
-      "address": "0x3e5dbf1cd120b8b13400e19822f17af486729d5992a874c93338114e29b37df",
-      "class_hash": "0x45c66fe78d8ea4f22bd72deb6bc0406fdb49c2324968deed8342a537a5c0f13",
+      "address": "0x4bb6b0105b495d3583522da9e3f21cfc82d959c1f6f95fb285968d567630785",
+      "class_hash": "0x11a6044c8e9c7adc3deb533196682a74b94319a55833ee3542c9390de7ada6d",
       "init_calldata": [],
-      "tag": "di-game_system",
-      "selector": "0x17ae3d72e533c01e49888b63e252bc36a8f2aa7d4c77ba0bd0d522164259673",
+      "tag": "td-game_system",
+      "selector": "0x5181ca5c2a3ffae64a9316e77191f5182d81882d1589dbccff129ca3c48247c",
       "systems": [
         "new_game",
         "activate_overclock",
@@ -59,11 +59,11 @@
       ]
     },
     {
-      "address": "0x19769fe60733c1eea52f81ad367ad51b2329576032489f44f3d9972e82ee0bc",
-      "class_hash": "0x7e3e5e9441c8f045506d66e9f2ba1fadb2ce626809ae33b2927217f82a607c4",
+      "address": "0x1bfe8ed70acd5c057dd8e6547a516150503963023a29acd4c6fc7872c63658f",
+      "class_hash": "0x55c3fa19a27b6792a56b26a80b41dccea54f489358f6f92cb6bbc7350a587bd",
       "init_calldata": [],
-      "tag": "di-wave_system",
-      "selector": "0x2327027e692be18fb4f0748d22913dc03a9fd35a5712d78033d792e4db2327c",
+      "tag": "td-wave_system",
+      "selector": "0x518ab3d320fb24ae95e1805f87cd6d1647c0e625e3f79df2d74c9cd1ffee7d3",
       "systems": [
         "start_wave",
         "upgrade"
@@ -75,8 +75,8 @@
     {
       "members": [
         {
-          "name": "player",
-          "type": "core::starknet::contract_address::ContractAddress",
+          "name": "token_id",
+          "type": "core::felt252",
           "key": true
         },
         {
@@ -110,16 +110,21 @@
           "key": false
         }
       ],
-      "class_hash": "0x37aef4c3de8b4dad6ba27e51df132064c3513aa2aeb551d774cb1b7c7efe5b8",
-      "tag": "di-Factory",
-      "selector": "0x58d0916969467ae1041011160e76daf3f6b491bf46d3a1daeb49037ae11efa1"
+      "class_hash": "0x7b7f7cf83355ab9fb0b7c7207f4df8e1833ab2edd23b8ad82f8dc9ec0427c85",
+      "tag": "td-Factory",
+      "selector": "0x3784729529133337d151952f35e36b53abc24dfbb50314539ddc068dd2b2ec9"
     },
     {
       "members": [
         {
+          "name": "token_id",
+          "type": "core::felt252",
+          "key": true
+        },
+        {
           "name": "player",
           "type": "core::starknet::contract_address::ContractAddress",
-          "key": true
+          "key": false
         },
         {
           "name": "wave_number",
@@ -182,15 +187,15 @@
           "key": false
         }
       ],
-      "class_hash": "0x4e14f2a885fc3b2006016f829265d6ad064efc986b0a2faaa070bab5b3ef2f9",
-      "tag": "di-GameState",
-      "selector": "0x520c18d6619456798fbcb4ba5476d0480a79a9c6ae1948f8a119bf0b4c10ac7"
+      "class_hash": "0x56cc55d80d665f44733b160f7254e91acb1f969e8e0cd0acbbb00de1cf7b5a1",
+      "tag": "td-GameState",
+      "selector": "0x704f790bf4db3b2cafb9ac377c32b9a25a92787a526b6cea62d7d1a4f37738b"
     },
     {
       "members": [
         {
-          "name": "player",
-          "type": "core::starknet::contract_address::ContractAddress",
+          "name": "token_id",
+          "type": "core::felt252",
           "key": true
         },
         {
@@ -234,9 +239,9 @@
           "key": false
         }
       ],
-      "class_hash": "0x2628bbf2ac34e4374ff3e3565e5f2f6f46d67a3f3f39896084e801118919f08",
-      "tag": "di-Tower",
-      "selector": "0x1d6817c625121ea236f7a90b170202adec21813a5359735d6c278f6f7eb5442"
+      "class_hash": "0x4216d6afe9043acba9e14ee32b8c03aa9528720c03ed866ecd8954b810907dc",
+      "tag": "td-Tower",
+      "selector": "0x4f3f0e499e57482f07ed4d079f0917a820a722d5aa73297c658ac169b8f658a"
     }
   ],
   "events": [],
@@ -2027,8 +2032,8 @@
       "name": "dojo_intro::models::Factory",
       "members": [
         {
-          "name": "player",
-          "type": "core::starknet::contract_address::ContractAddress"
+          "name": "token_id",
+          "type": "core::felt252"
         },
         {
           "name": "factory_id",
@@ -2086,6 +2091,10 @@
       "type": "struct",
       "name": "dojo_intro::models::GameState",
       "members": [
+        {
+          "name": "token_id",
+          "type": "core::felt252"
+        },
         {
           "name": "player",
           "type": "core::starknet::contract_address::ContractAddress"
@@ -2145,6 +2154,10 @@
       "name": "dojo_intro::models::GameStateValue",
       "members": [
         {
+          "name": "player",
+          "type": "core::starknet::contract_address::ContractAddress"
+        },
+        {
           "name": "wave_number",
           "type": "core::integer::u32"
         },
@@ -2199,8 +2212,8 @@
       "name": "dojo_intro::models::Tower",
       "members": [
         {
-          "name": "player",
-          "type": "core::starknet::contract_address::ContractAddress"
+          "name": "token_id",
+          "type": "core::felt252"
         },
         {
           "name": "tower_id",
@@ -2297,6 +2310,10 @@
           "name": "place_tower",
           "inputs": [
             {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
+            {
               "name": "tower_type",
               "type": "core::integer::u8"
             },
@@ -2316,6 +2333,10 @@
           "type": "function",
           "name": "place_factory",
           "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
             {
               "name": "factory_type",
               "type": "core::integer::u8"
@@ -2337,6 +2358,10 @@
           "name": "upgrade_factory",
           "inputs": [
             {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
+            {
               "name": "factory_id",
               "type": "core::integer::u32"
             }
@@ -2348,6 +2373,10 @@
           "type": "function",
           "name": "upgrade_tower",
           "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
             {
               "name": "tower_id",
               "type": "core::integer::u32"
@@ -2384,6 +2413,10 @@
           "name": "new_game",
           "inputs": [
             {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
+            {
               "name": "difficulty",
               "type": "core::integer::u32"
             }
@@ -2394,9 +2427,78 @@
         {
           "type": "function",
           "name": "activate_overclock",
-          "inputs": [],
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            }
+          ],
           "outputs": [],
           "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "score",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u64"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "game_over",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "score_batch",
+          "inputs": [
+            {
+              "name": "token_ids",
+              "type": "core::array::Span::<core::felt252>"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::array::Array::<core::integer::u64>"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "game_over_batch",
+          "inputs": [
+            {
+              "name": "token_ids",
+              "type": "core::array::Span::<core::felt252>"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::array::Array::<core::bool>"
+            }
+          ],
+          "state_mutability": "view"
         }
       ]
     },
@@ -2424,7 +2526,12 @@
         {
           "type": "function",
           "name": "start_wave",
-          "inputs": [],
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            }
+          ],
           "outputs": [],
           "state_mutability": "external"
         }
@@ -2458,8 +2565,8 @@
       "kind": "struct",
       "members": [
         {
-          "name": "player",
-          "type": "core::starknet::contract_address::ContractAddress",
+          "name": "token_id",
+          "type": "core::felt252",
           "kind": "key"
         },
         {

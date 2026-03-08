@@ -1,11 +1,13 @@
 use starknet::ContractAddress;
 
-// GameState – keyed by player address
+// GameState – keyed by EGS token_id (felt252)
+// token_id is minted by Denshokan; player is the wallet that initialised the session.
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]
 pub struct GameState {
     #[key]
-    pub player: ContractAddress,
+    pub token_id: felt252,
+    pub player: ContractAddress,   // wallet that called new_game
     pub wave_number: u32,
     pub gold: u32,
     pub game_over: bool,
@@ -20,12 +22,12 @@ pub struct GameState {
     pub overclock_used: bool,  // active ability: halves all tower cooldowns for one wave
 }
 
-// Tower – keyed by (player, tower_id)
+// Tower – keyed by (token_id, tower_id)
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]
 pub struct Tower {
     #[key]
-    pub player: ContractAddress,
+    pub token_id: felt252,
     #[key]
     pub tower_id: u32,
     pub tower_type: u8, // 0=GPT, 1=Vision, 2=Code
@@ -37,12 +39,12 @@ pub struct Tower {
     pub level: u32,     // 1-3; affects damage output
 }
 
-// Factory – keyed by (player, factory_id)
+// Factory – keyed by (token_id, factory_id)
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]
 pub struct Factory {
     #[key]
-    pub player: ContractAddress,
+    pub token_id: felt252,
     #[key]
     pub factory_id: u32,
     pub factory_type: u8, // 0=Input, 1=Image, 2=Code

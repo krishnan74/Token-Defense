@@ -39,7 +39,7 @@
       "address": "0x6dbe32636a5775508a95b6d1c2c47d0a02698be40fd58ba94cc9cb3e4cff377",
       "class_hash": "0x37404d8ef3b7a0810226ca645d4b8e9a99f8210f42d8348b1a3eb209ac91f3e",
       "init_calldata": [],
-      "tag": "di-building_system",
+      "tag": "td-building_system",
       "selector": "0x2aa8fcc21e02a2df7334b785cda63fde60c5636a35624b7825475d20f72e8fa",
       "systems": [
         "place_tower",
@@ -52,7 +52,7 @@
       "address": "0x3e5dbf1cd120b8b13400e19822f17af486729d5992a874c93338114e29b37df",
       "class_hash": "0x5d8763b70d6e00f247c717264be9fcc71e542f214813b85dd80057af56bc37b",
       "init_calldata": [],
-      "tag": "di-game_system",
+      "tag": "td-game_system",
       "selector": "0x17ae3d72e533c01e49888b63e252bc36a8f2aa7d4c77ba0bd0d522164259673",
       "systems": [
         "new_game",
@@ -63,7 +63,7 @@
       "address": "0x19769fe60733c1eea52f81ad367ad51b2329576032489f44f3d9972e82ee0bc",
       "class_hash": "0x299e79b08cc406c2aca0b91f5dabbd577ae4ce1743865376d7fc7bd10fd0de7",
       "init_calldata": [],
-      "tag": "di-wave_system",
+      "tag": "td-wave_system",
       "selector": "0x2327027e692be18fb4f0748d22913dc03a9fd35a5712d78033d792e4db2327c",
       "systems": [
         "start_wave",
@@ -112,7 +112,7 @@
         }
       ],
       "class_hash": "0x37aef4c3de8b4dad6ba27e51df132064c3513aa2aeb551d774cb1b7c7efe5b8",
-      "tag": "di-Factory",
+      "tag": "td-Factory",
       "selector": "0x58d0916969467ae1041011160e76daf3f6b491bf46d3a1daeb49037ae11efa1"
     },
     {
@@ -174,7 +174,7 @@
         }
       ],
       "class_hash": "0x6d35f0d11e467f86bd2112ad60070f6c86b112c2d709b183d2ff125885cb77",
-      "tag": "di-GameState",
+      "tag": "td-GameState",
       "selector": "0x520c18d6619456798fbcb4ba5476d0480a79a9c6ae1948f8a119bf0b4c10ac7"
     },
     {
@@ -221,7 +221,7 @@
         }
       ],
       "class_hash": "0x4077740c4fe27a95afb59b2d9d5b8e1bbb42751d3b4b6192384553823eb54b3",
-      "tag": "di-Tower",
+      "tag": "td-Tower",
       "selector": "0x1d6817c625121ea236f7a90b170202adec21813a5359735d6c278f6f7eb5442"
     }
   ],
