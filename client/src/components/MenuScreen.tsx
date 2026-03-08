@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { DIFFICULTY_SETTINGS } from '../constants';
+import LoreModal from './LoreModal';
 
 const MENU_TOWERS = [
   { label: 'GPT',    color: '#2B6CB0', dark: '#1A3D70', text: '#BEE3F8', desc: 'Input token tower',  range: '3 tiles' },
@@ -20,6 +22,7 @@ interface MenuScreenProps {
 }
 
 export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficulty, onAction }: MenuScreenProps) {
+  const [showLore, setShowLore] = useState(false);
   return (
     <div className="menu-root">
       <div className="menu-grass" />
@@ -117,8 +120,14 @@ export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficult
       </div>
 
       <div className="menu-footer">
+        <button className="menu-lore-btn" onClick={() => setShowLore(true)}>
+          ◆ LORE
+        </button>
+        &nbsp;·&nbsp;
         TOKEN DEFENSE · Built on Dojo / StarkNet · All state is onchain · Humans and agents welcome
       </div>
+
+      {showLore && <LoreModal onClose={() => setShowLore(false)} />}
     </div>
   );
 }

@@ -66,14 +66,14 @@ const styles = {
     fontFamily: "'VT323', monospace", fontSize: 14, color: '#6B3A1E',
   },
   label: {
-    fontFamily: "'VT323', monospace", fontSize: 14, color: '#A08060', letterSpacing: 1,
+    fontFamily: "'VT323', monospace", fontSize: 17, color: '#A08060', letterSpacing: 1,
   },
   value: {
-    fontFamily: "'VT323', monospace", fontSize: 20, fontWeight: 'normal',
+    fontFamily: "'VT323', monospace", fontSize: 23, fontWeight: 'normal',
     textShadow: '1px 1px 0 rgba(0,0,0,0.5)',
   },
   cap: {
-    fontFamily: "'VT323', monospace", fontSize: 13,
+    fontFamily: "'VT323', monospace", fontSize: 16,
   },
   divider: { width: 2, height: 24, background: '#4A2510', margin: '0 6px' },
   capWarning: {

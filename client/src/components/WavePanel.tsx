@@ -109,7 +109,7 @@ const styles = {
   },
   left: { display: 'flex', alignItems: 'center', gap: 10 },
   waveLabel: {
-    fontFamily: "'VT323', monospace", fontSize: 20, color: '#A08060',
+    fontFamily: "'VT323', monospace", fontSize: 23, color: '#A08060',
     letterSpacing: 1,
   },
   waveNum: { color: '#FFD700', textShadow: '1px 1px 0 #4A2510' },
@@ -121,13 +121,13 @@ const styles = {
     boxShadow: '1px 1px 0 #1A2E08',
   },
   modifierBadge: {
-    fontFamily: "'VT323', monospace", fontSize: 13,
+    fontFamily: "'VT323', monospace", fontSize: 16,
     border: '1px solid', padding: '1px 8px',
     letterSpacing: 0.5,
   },
   preview: { display: 'flex', alignItems: 'center', gap: 6, flex: 1 },
   previewLabel: {
-    fontFamily: "'VT323', monospace", fontSize: 14, color: '#A08060', letterSpacing: 1,
+    fontFamily: "'VT323', monospace", fontSize: 17, color: '#A08060', letterSpacing: 1,
   },
   enemyBadge: {
     display: 'flex', alignItems: 'center', gap: 2,
@@ -142,7 +142,7 @@ const styles = {
     border: '2px solid #5A3A9A',
     borderRadius: 0,
     cursor: 'pointer',
-    fontFamily: "'VT323', monospace", fontSize: 14,
+    fontFamily: "'VT323', monospace", fontSize: 17,
     boxShadow: '2px 2px 0 #1A0A3A',
     letterSpacing: 0.5,
     transition: 'background 0.1s',
@@ -159,7 +159,7 @@ const styles = {
     border: '3px solid #2E5010',
     borderRadius: 0,
     cursor: 'pointer',
-    fontFamily: "'VT323', monospace", fontSize: 18,
+    fontFamily: "'VT323', monospace", fontSize: 21,
     boxShadow: '3px 3px 0 #1A2E08',
     letterSpacing: 1,
     transition: 'background 0.1s',

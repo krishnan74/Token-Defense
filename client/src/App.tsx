@@ -5,6 +5,7 @@ import { useContract, useProvider } from '@starknet-react/core';
 import denshokanAbi from './abi/denshokan.json';
 import BuildMenu from './components/BuildMenu';
 import GameBoard from './components/GameBoard';
+import GuidedTour, { shouldShowTour } from './components/GuidedTour';
 import GameOverCard from './components/GameOverCard';
 import LoadingScreen from './components/LoadingScreen';
 import MenuScreen from './components/MenuScreen';
@@ -52,6 +53,7 @@ export default function App({ account, manifest }: AppProps) {
   const [gameStats,         setGameStats]         = useState<GameStats>(EMPTY_STATS);
   const [overclockPending,  setOverclockPending]  = useState(false);
   const [conveyors,         setConveyors]         = useState<Conveyor[]>([]);
+  const [showTour,          setShowTour]          = useState(false);
   const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
 
   const clientBaseHealthRef     = useRef<number>(BASE_MAX_HP);
@@ -158,7 +160,10 @@ export default function App({ account, manifest }: AppProps) {
 
   // ── Clear loader once Torii delivers the new game state ───────────────────
   useEffect(() => {
-    if (gameState && isStartingGame) setIsStartingGame(false);
+    if (gameState && isStartingGame) {
+      setIsStartingGame(false);
+      if (shouldShowTour()) setShowTour(true);
+    }
   }, [gameState, isStartingGame]);
 
   // ── Sound effects during wave replay ──────────────────────────────────────
@@ -475,6 +480,8 @@ export default function App({ account, manifest }: AppProps) {
           }}
         />
       )}
+
+      {showTour && <GuidedTour onComplete={() => setShowTour(false)} />}
 
       <div className="app-toasts">
         {achievementToasts.map((ach: Achievement) => (

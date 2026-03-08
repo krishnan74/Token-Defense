@@ -47,7 +47,7 @@
 .connect-username {
   color: #FFD700;
   font-family: 'VT323', monospace;
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .disconnect-btn {
@@ -58,7 +58,7 @@
   border-radius: 0;
   cursor: pointer;
   font-family: 'VT323', monospace;
-  font-size: 14px;
+  font-size: 17px;
   transition: color 0.1s, border-color 0.1s;
 }
 .disconnect-btn:hover { color: #F5E6C8; border-color: #6B3A1E; }
@@ -107,7 +107,7 @@
 
 .app-subtitle {
   font-family: 'VT323', monospace;
-  font-size: 18px;
+  font-size: 21px;
   color: #A08060;
 }
 
@@ -210,7 +210,7 @@
 }
 
 .app-resolving-text {
-  font-size: 20px;
+  font-size: 23px;
   color: #FFD700;
   letter-spacing: 1px;
   text-shadow: 2px 2px 0 #4A2510;
@@ -246,7 +246,7 @@
 }
 
 .app-result-row {
-  font-size: 18px;
+  font-size: 21px;
   color: #F5E6C8;
   margin-bottom: 4px;
 }
@@ -262,7 +262,7 @@
 }
 
 .app-result-stats {
-  font-size: 14px;
+  font-size: 17px;
   color: #A08060;
   margin-bottom: 8px;
   text-align: center;
@@ -278,14 +278,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 15px;
+  font-size: 18px;
   color: #F5E6C8;
   margin-bottom: 3px;
 }
 
 .app-kill-label { color: #A08060; }
 
-.app-kill-status { font-size: 14px; }
+.app-kill-status { font-size: 17px; }
 .app-kill-status--dead  { color: #5CB85C; }
 .app-kill-status--alive { color: #D9534F; }
 
@@ -358,13 +358,13 @@
 }
 
 .app-gameover-sub {
-  font-size: 18px;
+  font-size: 22px;
   color: #F5E6C8;
   margin-bottom: 12px;
 }
 
 .app-gameover-stats {
-  font-size: 16px;
+  font-size: 19px;
   color: #A08060;
   margin-bottom: 20px;
 }
@@ -436,12 +436,12 @@
 }
 
 .app-achievement-title {
-  font-size: 18px;
+  font-size: 21px;
   color: #FFD700;
 }
 
 .app-achievement-desc {
-  font-size: 13px;
+  font-size: 16px;
   color: #A08060;
 }
 
@@ -491,10 +491,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 25px;
   z-index: 1;
   max-width: 900px;
   width: 100%;
+  margin-bottom: 20px;
 }
 
 /* ── Title ── */
@@ -529,7 +530,7 @@
 
 .menu-subtitle {
   font-family: 'VT323', monospace;
-  font-size: 20px;
+  font-size: 23px;
   color: #A08060;
   letter-spacing: 1px;
 }
@@ -555,7 +556,7 @@
 
 .menu-showcase-label {
   font-family: 'VT323', monospace;
-  font-size: 16px;
+  font-size: 19px;
   color: #6B3A1E;
   letter-spacing: 3px;
   text-align: center;
@@ -563,7 +564,7 @@
 
 .menu-cards-row {
   display: flex;
-  gap: 12px;
+  gap: 30px;
   justify-content: center;
 }
 
@@ -617,7 +618,7 @@
 
 .menu-enemy-name {
   font-family: 'VT323', monospace;
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.5px;
   margin-bottom: 2px;
   line-height: 1.2;
@@ -625,7 +626,7 @@
 
 .menu-card-desc {
   font-family: 'VT323', monospace;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.2;
 }
 
@@ -657,7 +658,7 @@
 
 .menu-difficulty-label {
   font-family: 'VT323', monospace;
-  font-size: 16px;
+  font-size: 19px;
   color: '#6B3A1E';
   letter-spacing: 3px;
 }
@@ -687,7 +688,7 @@
 
 .menu-cta-hint {
   font-family: 'VT323', monospace;
-  font-size: 20px;
+  font-size: 23px;
   color: #6B3A1E;
   border: 3px solid #4A2510;
   padding: 12px 24px;
@@ -725,7 +726,7 @@
   position: absolute;
   bottom: 40px;
   font-family: 'VT323', monospace;
-  font-size: 13px;
+  font-size: 16px;
   color: #734a36;
   letter-spacing: 1px;
   z-index: 1;
@@ -769,7 +770,7 @@
 
 .menu-loader-sub {
   font-family: 'VT323', monospace;
-  font-size: 17px;
+  font-size: 20px;
   color: #A08060;
 }
 
@@ -791,4 +792,56 @@
 @keyframes dot-blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.15; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LORE MODAL — Star Wars crawl
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.lore-scroll-text {
+  animation: lore-crawl 110s linear forwards;
+  padding-top: 100vh;
+}
+
+@keyframes lore-crawl {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LORE BUTTON — in menu
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.menu-lore-btn {
+  padding: 5px 18px;
+  background: transparent;
+  color: #C8952A;
+  border: 2px solid #6B4A1E;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: 'VT323', monospace;
+  font-size: 15px;
+  letter-spacing: 1px;
+  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  animation: lore-btn-glow 3s ease-in-out infinite;
+}
+
+@keyframes lore-btn-glow {
+  0%, 100% {
+    box-shadow: none;
+    color: #C8952A;
+    border-color: #6B4A1E;
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(255, 180, 50, 0.5), 0 0 16px rgba(255, 150, 20, 0.2);
+    color: #FFD700;
+    border-color: #A07030;
+  }
+}
+
+.menu-lore-btn:hover {
+  color: #FFD700;
+  border-color: #FFD700;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+  animation: none;
 }
