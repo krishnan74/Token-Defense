@@ -14,7 +14,7 @@ import {
 } from './constants';
 import type { ConveyorTile } from './constants';
 import type { ManifestContract } from './dojo/models';
-import { buildContractAddresses, decodeWaveResolvedEvent } from './dojo/contracts';
+import { DENSHOKAN_ADDRESS, buildContractAddresses, decodeWaveResolvedEvent, parseMintedTokenId } from './dojo/contracts';
 import { useActions } from './hooks/useActions';
 import { useAchievements } from './hooks/useAchievements';
 import type { Achievement } from './hooks/useAchievements';
@@ -93,10 +93,9 @@ interface PendingReplay {
 const EMPTY_STATS: GameStats = { totalKills: 0, totalGoldEarned: 0, totalBaseDamage: 0, wavesCompleted: 0 };
 
 export default function App({ account, manifest }: AppProps) {
-  // token_id is the EGS session key. For single-session-per-wallet mode it equals
-  // the player's address (set when new_game is called). A future Denshokan mint
-  // flow would set this to the minted NFT token_id instead.
-  const tokenId = account?.address ?? null;
+  // token_id is the Denshokan ERC721 token ID minted for each game session.
+  // Persisted in localStorage per account so sessions survive page refreshes.
+  const [tokenId, setTokenId] = useState<string | null>(null);
 
   const { gameState, towers, factories, refreshGameState } = useGameState(tokenId);
   const actions = useActions(account, manifest, tokenId);
@@ -148,6 +147,48 @@ export default function App({ account, manifest }: AppProps) {
   const [optimisticFactories, setOptimisticFactories] = useState<unknown[]>([]);
   const [optimisticGoldSpent, setOptimisticGoldSpent] = useState(0);
   const [upgradeOptimistic, setUpgradeOptimistic] = useState<UpgradeOptimistic>({ counts: {}, gold: 0 });
+
+  // ── Load tokenId from localStorage when account connects / changes ─────────
+  useEffect(() => {
+    if (!account?.address) { setTokenId(null); return; }
+    const saved = localStorage.getItem(`td:tokenId:${account.address}`);
+    if (saved) setTokenId(saved);
+  }, [account?.address]);
+
+  // ── Mint a Denshokan ERC721 token then call new_game ─────────────────────
+  // Returns the newly minted token_id (hex string).
+  async function mintAndStart(difficulty: number): Promise<void> {
+    if (!account) throw new Error('Not connected');
+    setIsStartingGame(true);
+    try {
+      // 1. Mint on Denshokan — calldata: [game_addr, player_addr, 0 (None), 1 (start=true)]
+      const gameAddr = buildContractAddresses(manifest?.contracts ?? []).game;
+      const mintTx = await account.execute({
+        contractAddress: DENSHOKAN_ADDRESS,
+        entrypoint: 'mint',
+        calldata: [gameAddr, account.address, '0', '1'],
+      } as Parameters<typeof account.execute>[0]);
+      console.log('[mint] tx:', mintTx);
+
+      // 2. Wait for receipt and parse token_id from Transfer event
+      const receipt = await (provider as { waitForTransaction: (h: string) => Promise<unknown> })
+        .waitForTransaction(mintTx.transaction_hash);
+      const newTokenId = parseMintedTokenId((receipt as { events?: unknown[] }).events ?? []);
+      if (!newTokenId || newTokenId === '0x0') throw new Error('Failed to parse token_id from mint receipt');
+      console.log('[mint] token_id:', newTokenId);
+
+      // 3. Persist token_id and update state
+      localStorage.setItem(`td:tokenId:${account.address}`, newTokenId);
+      setTokenId(newTokenId);
+
+      // 4. Start a new game session with the fresh token_id
+      await actions.newGame(difficulty, newTokenId);
+    } catch (e) {
+      console.error('[mintAndStart] error:', e);
+      setIsStartingGame(false);
+      throw e;
+    }
+  }
 
   // ── Sync client base health from chain on first load (or new game) ────────
   useEffect(() => {
@@ -664,16 +705,12 @@ export default function App({ account, manifest }: AppProps) {
         onSelectDifficulty={setSelectedDifficulty}
         onAction={() => {
           sfx.playClick();
-          setIsStartingGame(true);
           setConveyors([]);
           clientBaseHealthInitRef.current = false;
           const startHp = getDifficultyBaseHp(selectedDifficulty);
           clientBaseHealthRef.current = startHp;
           setClientBaseHealthDisplay(startHp);
-          actions.newGame(selectedDifficulty).catch((e) => {
-            console.error(e);
-            setIsStartingGame(false);
-          });
+          mintAndStart(selectedDifficulty).catch(console.error);
         }}
       />
     );
@@ -807,7 +844,7 @@ export default function App({ account, manifest }: AppProps) {
                 const startHp = getDifficultyBaseHp(diff);
                 clientBaseHealthRef.current = startHp;
                 setClientBaseHealthDisplay(startHp);
-                actions.newGame(diff).catch(console.error);
+                mintAndStart(diff).catch(console.error);
               }}
             >
               PLAY AGAIN

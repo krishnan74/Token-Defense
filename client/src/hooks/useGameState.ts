@@ -44,6 +44,12 @@ export function useGameState(tokenId: string | null): {
   useEffect(() => {
     if (!tokenId || !sdk) return;
 
+    // Clear stale state from any previous tokenId so the loading screen
+    // doesn't dismiss prematurely while waiting for the new game to appear.
+    setGameState(null);
+    setTowers([]);
+    setFactories([]);
+
     let subscription: { cancel: () => void } | null = null;
 
     async function subscribe() {

@@ -2,6 +2,9 @@
 
 import type { ContractAddresses, ManifestContract, WaveResolvedEvent } from './models';
 
+/** Shared Denshokan MinigameToken (ERC721) on Sepolia — the EGS session registry. */
+export const DENSHOKAN_ADDRESS = '0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467';
+
 /** Resolves the three system contract addresses from the Sozo manifest. */
 export function buildContractAddresses(
   contracts: ManifestContract[],
@@ -12,6 +15,39 @@ export function buildContractAddresses(
     building: addr('td-building_system'),
     wave: addr('td-wave_system'),
   };
+}
+
+/**
+ * Parses the minted ERC721 token_id from a Denshokan mint() receipt.
+ * Handles all common OZ Cairo ERC721 Transfer event encodings:
+ *   - keys=[selector, from, to, id_low, id_high]  (all #[key])
+ *   - keys=[selector, from, to], data=[id_low, id_high]
+ *   - keys=[selector], data=[from, to, id_low, id_high]  (all data)
+ */
+export function parseMintedTokenId(events: unknown[]): string | null {
+  const denshokan = DENSHOKAN_ADDRESS.toLowerCase();
+  for (const evt of events as RawEvent[]) {
+    if (evt.from_address?.toLowerCase() !== denshokan) continue;
+    const keys = evt.keys ?? [];
+    const data = evt.data ?? [];
+    try {
+      // Format A: keys=[selector, from=0, to, id_low, id_high]
+      if (keys.length >= 5 && BigInt(keys[1]) === 0n) {
+        return '0x' + BigInt(keys[3]).toString(16);
+      }
+      // Format B: keys=[selector, from=0, to], data=[id_low, id_high]
+      if (keys.length >= 3 && BigInt(keys[1]) === 0n && data.length >= 1) {
+        return '0x' + BigInt(data[0]).toString(16);
+      }
+      // Format C: keys=[selector], data=[from=0, to, id_low, id_high]
+      if (keys.length >= 1 && data.length >= 4 && BigInt(data[0]) === 0n) {
+        return '0x' + BigInt(data[2]).toString(16);
+      }
+    } catch {
+      // malformed hex — skip
+    }
+  }
+  return null;
 }
 
 interface RawEvent {

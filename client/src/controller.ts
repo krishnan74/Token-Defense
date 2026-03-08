@@ -1,4 +1,5 @@
 import manifest from '../../contracts/manifest_sepolia.json' with { type: 'json' };
+import { DENSHOKAN_ADDRESS } from './dojo/contracts';
 
 const contracts = manifest.contracts;
 const addr = (tag: string): string | undefined =>
@@ -13,6 +14,13 @@ const controllerOpts = {
   defaultChainId: '0x534e5f5345504f4c4941',
   policies: {
     contracts: {
+      [DENSHOKAN_ADDRESS]: {
+        name: 'Denshokan — Minigame Token',
+        description: 'Mint a game session NFT to track your score on-chain',
+        methods: [
+          { name: 'Mint', entrypoint: 'mint', description: 'Mint a new game session token' },
+        ],
+      },
       ...(gameContract && {
         [gameContract]: {
           name: 'Token Defense — Game',

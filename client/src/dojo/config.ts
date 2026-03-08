@@ -1,4 +1,4 @@
-export const TORII_URL: string = import.meta.env.VITE_TORII_URL ?? 'http://127.0.0.1:8080';
+export const TORII_URL: string = import.meta.env.VITE_TORII_URL ?? 'https://api.cartridge.gg/x/token-defense/torii';
 export const RPC_URL: string =
   import.meta.env.VITE_RPC_URL ?? 'https://api.cartridge.gg/x/starknet/sepolia';
 export const CHAIN_ID: string =

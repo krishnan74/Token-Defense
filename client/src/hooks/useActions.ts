@@ -31,9 +31,12 @@ export function useActions(
   const tid = tokenId ?? '0x0';
 
   return {
-    /** Initialise a new game session. token_id = player address for single-session-per-wallet mode. */
-    newGame: (difficulty: number) =>
-      call(addresses.game, 'new_game', [tid, difficulty]),
+    /**
+     * Initialise a new game session keyed by overrideTokenId (from Denshokan mint).
+     * Falls back to tid if no override supplied.
+     */
+    newGame: (difficulty: number, overrideTokenId?: string) =>
+      call(addresses.game, 'new_game', [overrideTokenId ?? tid, difficulty]),
 
     activateOverclock: () =>
       call(addresses.game, 'activate_overclock', [tid]),
