@@ -34,7 +34,10 @@ function Root() {
   return (
     <div style={{ fontFamily: 'monospace' }}>
       <div className="connect-bar">
-        <span className="connect-title">TOKEN DEFENSE</span>
+        <span className="connect-title"><img src="/favicon.png" alt="Token Defense" style={{
+          width: '24px',
+          height: '24px',
+        }} /> TOKEN DEFENSE</span>
         {account ? (
           <div className="connect-user">
             <span className="connect-username">{displayName}</span>

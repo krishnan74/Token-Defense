@@ -18,6 +18,9 @@
 }
 
 .connect-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: #FFD700;
   font-size: 20px;
   letter-spacing: 2px;
