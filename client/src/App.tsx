@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AccountInterface } from 'starknet';
+import { useProvider } from '@starknet-react/core';
 import BuildMenu from './components/BuildMenu';
 import GameBoard from './components/GameBoard';
 import ResourceBar from './components/ResourceBar';
@@ -13,13 +14,13 @@ import {
 } from './constants';
 import type { ConveyorTile } from './constants';
 import type { ManifestContract } from './dojo/models';
+import { buildContractAddresses, decodeWaveResolvedEvent } from './dojo/contracts';
 import { useActions } from './hooks/useActions';
 import { useAchievements } from './hooks/useAchievements';
 import type { Achievement } from './hooks/useAchievements';
 import { useGameState } from './hooks/useGameState';
 import { useSFX } from './hooks/useSFX';
 import type { WaveSnapshot } from './simulation/WaveSimulator';
-import { WaveSimulator } from './simulation/WaveSimulator';
 import { WaveReplay } from './simulation/WaveReplay';
 
 interface AppProps {
@@ -91,8 +92,10 @@ const EMPTY_STATS: GameStats = { totalKills: 0, totalGoldEarned: 0, totalBaseDam
 export default function App({ account, manifest }: AppProps) {
   const { gameState, towers, factories, refreshGameState } = useGameState(account);
   const actions = useActions(account, manifest);
+  const { provider } = useProvider();
   const sfx = useSFX();
   const { unlock, toasts: achievementToasts } = useAchievements();
+  const addresses = buildContractAddresses(manifest?.contracts ?? []);
 
   const [selectedBuild, setSelectedBuild] = useState<BuildSelection | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -117,10 +120,12 @@ export default function App({ account, manifest }: AppProps) {
   const preWaveStateRef = useRef<typeof gameState>(null);
   // Pre-wave base health — held until replay ends so sidebar doesn't jump during countdown
   const preWaveBaseHealthRef = useRef<number>(BASE_MAX_HP);
-  // Client-side base health tracking (chain base_health is unreliable for small damage)
+  // Client-side base health — updated from on-chain event after each wave
   const clientBaseHealthRef = useRef<number>(BASE_MAX_HP);
   const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
   const clientBaseHealthInitRef = useRef(false);
+  // tx hash from startWave — used to fetch receipt and decode WaveResolved event
+  const waveTxHashRef = useRef<string | null>(null);
   // Replay params + result, computed when chain confirms
   const pendingReplayRef = useRef<PendingReplay | null>(null);
 
@@ -231,9 +236,10 @@ export default function App({ account, manifest }: AppProps) {
     });
   }, [factories]);
 
-  // ── Wave confirmation: wave_number++ detected → start countdown ───────────
-  // start_wave() completes the wave on-chain in one tx; wave_number increments
-  // immediately. We wait for that, then run countdown, then WaveReplay.
+  // ── Wave confirmation: wave_number++ detected → fetch receipt → countdown ──
+  // start_wave() resolves the wave on-chain and emits WaveResolved event with
+  // exact per-enemy outcomes.  We detect finality via Torii (wave_number++),
+  // fetch the receipt to decode the bitmask, then countdown → replay.
   useEffect(() => {
     if (!isWaitingWaveActive || !gameState) return;
     const pre = preWaveStateRef.current;
@@ -241,83 +247,111 @@ export default function App({ account, manifest }: AppProps) {
     const completedWave = Number(gameState.wave_number);
     if (completedWave <= Number(pre.wave_number)) return; // not confirmed yet
 
-    // Chain confirmed — compute gold diff from chain, run fast sim for accurate base damage
-    setIsWaitingWaveActive(false);
+    // fetchCancelled only guards the async receipt fetch (component unmount / stale effect).
+    // It does NOT cancel the countdown — advance() must run uninterrupted.
+    let fetchCancelled = false;
 
-    const goldEarned = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
-    const waveBonus  = GOLD_PER_WAVE(completedWave);
+    const run = async () => {
+      // Fetch receipt and decode WaveResolved for exact per-enemy outcome data.
+      let enemyOutcomes = 0;
+      let baseDamageTaken = 0;
+      let goldEarned = Math.max(0, (gameState.gold ?? 0) - (pre.gold ?? 0));
 
-    // Run WaveSimulator synchronously (chain base_health is unreliable for small damage values)
-    const fastSim = new WaveSimulator({
-      towers: allTowers,
-      factories: allFactories,
-      gameState: { ...pre, base_health: clientBaseHealthRef.current },
-      waveNumber: completedWave,
-    });
-    const SIM_DT = 1 / 60;
-    while (!fastSim.done) fastSim.step(SIM_DT);
-    const baseDamageTaken = fastSim.baseDamage;
-    clientBaseHealthRef.current = Math.max(0, clientBaseHealthRef.current - baseDamageTaken);
-    setClientBaseHealthDisplay(clientBaseHealthRef.current);
-    const killGold        = Math.max(0, goldEarned - waveBonus);
-
-    const composition = WAVE_COMPOSITIONS[completedWave] ?? [];
-    const countByType: Record<string, number> = {};
-    for (const g of composition) countByType[g.type] = g.count;
-
-    let killedTJ = false, killedCO = false, killedHS = false;
-    outer: for (let mask = 0; mask < 8; mask++) {
-      const kTJ = !!(mask & 1), kCO = !!(mask & 2), kHS = !!(mask & 4);
-      const gold =
-        (kTJ ? (countByType['TextJailbreak']  ?? 0) * (ENEMIES['TextJailbreak']?.gold  ?? 0) : 0) +
-        (kCO ? (countByType['ContextOverflow'] ?? 0) * (ENEMIES['ContextOverflow']?.gold ?? 0) : 0) +
-        (kHS ? (countByType['HalluSwarm']      ?? 0) * (ENEMIES['HalluSwarm']?.gold      ?? 0) : 0);
-      if (gold === killGold) { killedTJ = kTJ; killedCO = kCO; killedHS = kHS; break outer; }
-    }
-
-    const killCount =
-      (killedTJ ? (countByType['TextJailbreak']  ?? 0) : 0) +
-      (killedCO ? (countByType['ContextOverflow'] ?? 0) : 0) +
-      (killedHS ? (countByType['HalluSwarm']      ?? 0) : 0);
-
-    const baseHealthRemaining = clientBaseHealthRef.current;
-
-    // Stash everything for after the countdown
-    pendingReplayRef.current = {
-      towers:   allTowers,
-      factories: allFactories,
-      preState: { ...pre } as NonNullable<typeof gameState>,
-      waveNumber: completedWave,
-      killedTJ, killedCO, killedHS,
-      baseDamageTaken,
-      resultSummary: {
-        waveNumber: completedWave, goldEarned, baseDamage: baseDamageTaken,
-        baseHealthRemaining, killedTJ, killedCO, killedHS, killCount,
-      },
-    };
-    preWaveStateRef.current = null;
-
-    // Start countdown
-    let remaining = 3;
-    setCountdown(remaining);
-    sfx.playCountdown();
-    const advance = () => {
-      remaining--;
-      if (remaining > 0) {
-        setCountdown(remaining);
-        sfx.playCountdown();
-        countdownTimerRef.current = setTimeout(advance, 800);
-      } else {
-        setCountdown(null);
-        sfx.playWaveStart();
-        const p = pendingReplayRef.current;
-        if (p) {
-          startReplay(p.towers, p.factories, p.preState, p.waveNumber,
-                      p.killedTJ, p.killedCO, p.killedHS, p.baseDamageTaken);
+      const txHash = waveTxHashRef.current;
+      if (txHash) {
+        try {
+          const receipt = await (provider as { getTransactionReceipt: (h: string) => Promise<unknown> })
+            .getTransactionReceipt(txHash);
+          const evt = decodeWaveResolvedEvent(
+            (receipt as { events?: unknown[] }).events ?? [],
+            addresses.wave,
+          );
+          if (evt) {
+            enemyOutcomes        = evt.enemy_outcomes;
+            baseDamageTaken      = evt.base_damage;
+            goldEarned           = Math.max(0, evt.new_gold - (pre.gold ?? 0));
+            clientBaseHealthRef.current = evt.new_base_health;
+          } else {
+            // Fallback: chain diff (reliable since contract always updates base_health)
+            baseDamageTaken = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
+            clientBaseHealthRef.current = Math.max(0, clientBaseHealthRef.current - baseDamageTaken);
+          }
+        } catch (e) {
+          console.warn('Receipt fetch failed, using chain diff:', e);
+          baseDamageTaken = Math.max(0, (pre.base_health ?? BASE_MAX_HP) - (gameState.base_health ?? BASE_MAX_HP));
+          clientBaseHealthRef.current = Math.max(0, clientBaseHealthRef.current - baseDamageTaken);
         }
       }
+
+      if (fetchCancelled) return;
+      setClientBaseHealthDisplay(clientBaseHealthRef.current);
+
+      // Decode per-type kill booleans from bitmask for result card display.
+      const composition = WAVE_COMPOSITIONS[completedWave] ?? [];
+      let bit = 0;
+      let killedTJ = true, killedCO = true, killedHS = true;
+      let killCount = 0;
+      for (const g of composition) {
+        for (let i = 0; i < g.count; i++) {
+          const killed = !!((enemyOutcomes >>> bit) & 1);
+          if (killed) { killCount++; }
+          else {
+            if (g.type === 'TextJailbreak')   killedTJ = false;
+            if (g.type === 'ContextOverflow') killedCO = false;
+            if (g.type === 'HalluSwarm')      killedHS = false;
+          }
+          bit++;
+        }
+      }
+      if (!composition.some((g) => g.type === 'TextJailbreak'))   killedTJ = true;
+      if (!composition.some((g) => g.type === 'ContextOverflow')) killedCO = true;
+      if (!composition.some((g) => g.type === 'HalluSwarm'))      killedHS = true;
+
+      const baseHealthRemaining = clientBaseHealthRef.current;
+
+      pendingReplayRef.current = {
+        towers: allTowers,
+        factories: allFactories,
+        preState: { ...pre } as NonNullable<typeof gameState>,
+        waveNumber: completedWave,
+        killedTJ, killedCO, killedHS,
+        baseDamageTaken,
+        resultSummary: {
+          waveNumber: completedWave, goldEarned, baseDamage: baseDamageTaken,
+          baseHealthRemaining, killedTJ, killedCO, killedHS, killCount,
+        },
+      };
+
+      waveTxHashRef.current = null;
+      preWaveStateRef.current = null;
+      setIsWaitingWaveActive(false);
+
+      // Countdown — not guarded by fetchCancelled; must run to completion
+      // even after setIsWaitingWaveActive(false) triggers a re-render/cleanup.
+      let remaining = 3;
+      setCountdown(remaining);
+      sfx.playCountdown();
+      const advance = () => {
+        remaining--;
+        if (remaining > 0) {
+          setCountdown(remaining);
+          sfx.playCountdown();
+          countdownTimerRef.current = setTimeout(advance, 800);
+        } else {
+          setCountdown(null);
+          sfx.playWaveStart();
+          const p = pendingReplayRef.current;
+          if (p) {
+            startReplay(p.towers, p.factories, p.preState, p.waveNumber,
+                        enemyOutcomes, p.baseDamageTaken);
+          }
+        }
+      };
+      countdownTimerRef.current = setTimeout(advance, 800);
     };
-    countdownTimerRef.current = setTimeout(advance, 800);
+
+    run();
+    return () => { fetchCancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.wave_number, isWaitingWaveActive]);
 
@@ -385,14 +419,14 @@ export default function App({ account, manifest }: AppProps) {
   function startReplay(
     replayTowers: unknown[], replayFactories: unknown[],
     preState: typeof gameState, waveNumber: number,
-    killedTJ: boolean, killedCO: boolean, killedHS: boolean, baseDamageTaken: number,
+    enemyOutcomes: number, baseDamageTaken: number,
   ) {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     replaySpeedRef.current = 1;
     setReplaySpeed(1);
     simRef.current = new WaveReplay({
       towers: replayTowers, factories: replayFactories,
-      gameState: preState, waveNumber, killedTJ, killedCO, killedHS, baseDamageTaken,
+      gameState: preState, waveNumber, enemyOutcomes, baseDamageTaken,
     });
     lastTimeRef.current = performance.now();
     setIsReplaying(true);
@@ -475,12 +509,17 @@ export default function App({ account, manifest }: AppProps) {
     preWaveBaseHealthRef.current = clientBaseHealthRef.current;
     setIsWaitingWaveActive(true);
     sfx.playClick();
-    actions.startWave().catch((e: unknown) => {
-      console.error('startWave failed:', e);
-      setIsWaitingWaveActive(false);
-      preWaveStateRef.current = null;
-      stopReplay();
-    });
+    actions.startWave()
+      .then((tx) => {
+        waveTxHashRef.current = (tx as { transaction_hash?: string }).transaction_hash ?? null;
+      })
+      .catch((e: unknown) => {
+        console.error('startWave failed:', e);
+        setIsWaitingWaveActive(false);
+        preWaveStateRef.current = null;
+        waveTxHashRef.current = null;
+        stopReplay();
+      });
   }
 
   function handleUpgrade(id: number | string) {

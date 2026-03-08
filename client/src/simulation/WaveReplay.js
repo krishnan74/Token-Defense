@@ -1,11 +1,10 @@
 /**
- * WaveReplay — animates a wave whose outcome is already known from on-chain data.
+ * WaveReplay — animates a wave whose outcome is known exactly from on-chain data.
  *
- * Instead of computing damage and letting the physics decide who dies, we receive
- * `killedTJ/CO/HS` booleans derived from the on-chain kill-gold and replay
- * the animation so it visually matches the chain result:
- *   - Killed groups: enemies take damage from towers and die before reaching base.
- *   - Surviving groups: enemies ignore tower hits and march to the base.
+ * Receives `enemyOutcomes` — a bitmask where bit i = 1 if the i-th spawned
+ * enemy was killed (spawn order: TJ group, CO group, HS group).
+ * Each enemy independently knows its fate, so the animation faithfully mirrors
+ * the contract's per-enemy simulation rather than group-level approximations.
  */
 
 import {
@@ -59,11 +58,8 @@ function posAtProgress(progress) {
 }
 
 /**
- * Compute the path progress (0-1) at which a tower can no longer cover an enemy
- * marching along the path.  We sample the path in fine steps and keep the last
- * point within TOWER_RANGE of any placed tower.  Enemies of killed groups will
- * die at (or shortly past) this point, giving the visual impression that the
- * last tower in their lane finished them off.
+ * Compute the path progress at which the last tower can no longer cover an enemy.
+ * Killed enemies will die at or just past this point.
  */
 function computeKillProgress(towers) {
   let maxProgress = 0.30;
@@ -85,14 +81,20 @@ function computeKillProgress(towers) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Build spawn queue with an `enemyIndex` field so each enemy can look up its
+ * outcome in the bitmask.  Order matches the contract: TJ first, then CO, HS.
+ */
 function buildSpawnQueue(waveNumber) {
   const composition = WAVE_COMPOSITIONS[waveNumber] ?? WAVE_COMPOSITIONS[10];
   const queue = [];
   let delay = 0;
+  let enemyIndex = 0;
   for (const group of composition) {
     for (let i = 0; i < group.count; i++) {
-      queue.push({ type: group.type, delay });
+      queue.push({ type: group.type, delay, enemyIndex });
       delay += 0.55;
+      enemyIndex++;
     }
     delay += 1.2;
   }
@@ -120,25 +122,19 @@ function computeMaxTokens(factories, gameState) {
 export class WaveReplay {
   /**
    * @param {object} opts
-   * @param {unknown[]} opts.towers        - confirmed tower entities
-   * @param {unknown[]} opts.factories     - confirmed factory entities
-   * @param {object}    opts.gameState     - PRE-wave on-chain GameState
-   * @param {number}    opts.waveNumber    - 1-based wave number (the one resolving)
-   * @param {boolean}   opts.killedTJ      - were all TextJailbreaks killed?
-   * @param {boolean}   opts.killedCO      - were all ContextOverflows killed?
-   * @param {boolean}   opts.killedHS      - were all HalluSwarms killed?
-   * @param {number}    opts.baseDamageTaken - total base damage from chain diff
+   * @param {unknown[]} opts.towers           - confirmed tower entities
+   * @param {unknown[]} opts.factories        - confirmed factory entities
+   * @param {object}    opts.gameState        - PRE-wave on-chain GameState
+   * @param {number}    opts.waveNumber       - 1-based wave number resolving
+   * @param {number}    opts.enemyOutcomes    - bitmask: bit i=1 if enemy i killed
+   * @param {number}    opts.baseDamageTaken  - total base damage (from event)
    */
-  constructor({ towers, factories, gameState, waveNumber, killedTJ, killedCO, killedHS, baseDamageTaken }) {
-    this.killedByType = {
-      TextJailbreak:   killedTJ,
-      ContextOverflow: killedCO,
-      HalluSwarm:      killedHS,
-    };
+  constructor({ towers, factories, gameState, waveNumber, enemyOutcomes, baseDamageTaken }) {
+    this._enemyOutcomes = enemyOutcomes >>> 0; // treat as unsigned 32-bit
 
-    // Base health starts at PRE-wave value; we'll drain it as enemies arrive.
-    this.baseHealth        = Number(gameState.base_health ?? 20);
-    this._baseDamageLeft   = Math.max(0, baseDamageTaken);
+    // Base health starts at PRE-wave value; drains as enemies arrive.
+    this.baseHealth      = Number(gameState.base_health ?? 20);
+    this._baseDamageLeft = Math.max(0, baseDamageTaken);
 
     // Tokens: start from pre-wave amounts + this wave's production (visual only).
     this.maxTokens = computeMaxTokens(factories, gameState);
@@ -161,10 +157,10 @@ export class WaveReplay {
       : 0.65;
 
     // Spawn queue
-    this.spawnQueue   = buildSpawnQueue(waveNumber);
-    this.spawnTimer   = 0;
-    this.enemies      = [];
-    this._allSpawned  = false;
+    this.spawnQueue  = buildSpawnQueue(waveNumber);
+    this.spawnTimer  = 0;
+    this.enemies     = [];
+    this._allSpawned = false;
 
     // Visual effects
     this.projectiles   = [];
@@ -211,7 +207,8 @@ export class WaveReplay {
     let i = 0;
     while (i < this.spawnQueue.length) {
       if (this.spawnTimer >= this.spawnQueue[i].delay) {
-        this.enemies.push(this._buildEnemy(this.spawnQueue[i].type));
+        const { type, enemyIndex } = this.spawnQueue[i];
+        this.enemies.push(this._buildEnemy(type, enemyIndex));
         this.spawnQueue.splice(i, 1);
       } else {
         i++;
@@ -220,12 +217,15 @@ export class WaveReplay {
     if (this.spawnQueue.length === 0) this._allSpawned = true;
   }
 
-  _buildEnemy(type) {
+  _buildEnemy(type, enemyIndex) {
     const def = ENEMIES[type];
     const wp0 = PATH_WAYPOINTS[0];
+    const killed = !!((this._enemyOutcomes >>> enemyIndex) & 1);
     return {
       id:            uid(),
       type,
+      enemyIndex,
+      killed,          // true = this enemy was killed on-chain
       x:             wp0.x,
       y:             wp0.y,
       waypointIndex: 1,
@@ -240,18 +240,16 @@ export class WaveReplay {
   }
 
   _moveEnemy(enemy, dt) {
-    const killed = this.killedByType[enemy.type];
-
     // Update fractional path progress for kill-point tracking.
     enemy.pathProgress += (enemy.speed * dt) / TOTAL_PATH_LENGTH;
 
-    // Killed enemy has been reduced to 0 hp AND reached kill point — die.
-    if (killed && enemy.hp <= 0) {
+    // Killed enemy with depleted HP — die at kill point.
+    if (enemy.killed && enemy.hp <= 0) {
       this._killEnemy(enemy);
       return;
     }
 
-    // Waypoint movement (same as WaveSimulator).
+    // Waypoint movement.
     if (enemy.waypointIndex >= PATH_WAYPOINTS.length) {
       this._reachBase(enemy);
       return;
@@ -304,9 +302,9 @@ export class WaveReplay {
       });
       tower.attackFlash = 0.18;
 
-      // Only actually damage enemies whose type is killed.
-      // Survivors are immune — they march through regardless.
-      if (this.killedByType[target.type]) {
+      // Only deal real damage to enemies marked as killed on-chain.
+      // Survivors are visually immune — they march through.
+      if (target.killed) {
         const damage = Math.round(tDef.damage * tier.dmgMultiplier);
         target.hp      -= damage;
         target.hitFlash = 0.1;
@@ -336,7 +334,6 @@ export class WaveReplay {
   _killEnemy(enemy) {
     enemy.alive = false;
 
-    // Death burst
     for (let p = 0; p < 7; p++) {
       const angle = (p / 7) * Math.PI * 2;
       this.particles.push({
@@ -356,7 +353,6 @@ export class WaveReplay {
   _reachBase(enemy) {
     enemy.alive = false;
 
-    // Apply damage up to the on-chain total remaining.
     const def = ENEMIES[enemy.type];
     const dmg = Math.min(def?.damage ?? 1, this._baseDamageLeft);
     this._baseDamageLeft = Math.max(0, this._baseDamageLeft - dmg);
@@ -406,16 +402,16 @@ export class WaveReplay {
 
   _snapshot() {
     return {
-      done:              this.done,
-      enemies:           this.enemies.map((e) => ({ ...e })),
-      towers:            this.towers.map((t) => ({ ...t })),
-      tokens:            { ...this.tokens },
-      maxTokens:         { ...this.maxTokens },
-      projectiles:       [...this.projectiles],
-      particles:         [...this.particles],
-      floatingTexts:     [...this.floatingTexts],
-      screenShakePulse:  this._screenShakePulse,
-      baseHealth:        this.baseHealth,
+      done:             this.done,
+      enemies:          this.enemies.map((e) => ({ ...e })),
+      towers:           this.towers.map((t) => ({ ...t })),
+      tokens:           { ...this.tokens },
+      maxTokens:        { ...this.maxTokens },
+      projectiles:      [...this.projectiles],
+      particles:        [...this.particles],
+      floatingTexts:    [...this.floatingTexts],
+      screenShakePulse: this._screenShakePulse,
+      baseHealth:       this.baseHealth,
     };
   }
 }

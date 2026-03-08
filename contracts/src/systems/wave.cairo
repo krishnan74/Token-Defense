@@ -21,6 +21,31 @@ pub mod wave_system {
         tower_base_damage, compute_shots, count_path_cells_covered,
     };
 
+    // ── Event emitted when a wave resolves ────────────────────────────────────
+    // enemy_outcomes: bitmask — bit i = 1 if the i-th spawned enemy was killed.
+    // Spawn order: TJ group (indices 0..tj_count-1), then CO, then HS.
+    // Clients decode this to drive a faithful per-enemy replay animation.
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    pub enum Event {
+        WaveResolved: WaveResolved,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct WaveResolved {
+        #[key]
+        pub player: ContractAddress,
+        pub wave_number: u32,
+        pub enemy_outcomes: u32,
+        pub kill_gold: u32,
+        pub base_damage: u32,
+        pub new_base_health: u32,
+        pub new_gold: u32,
+        pub input_consumed: u32,
+        pub image_consumed: u32,
+        pub code_consumed: u32,
+    }
+
     #[abi(embed_v0)]
     impl WaveSystemImpl of IWaveSystem<ContractState> {
         fn start_wave(ref self: ContractState) {
@@ -32,156 +57,214 @@ pub mod wave_system {
             assert(!game.victory, 'Already won');
             assert(game.wave_number < MAX_WAVES, 'Max waves reached');
 
-            resolve_wave(ref world, ref game, player);
+            let (enemy_outcomes, kill_gold, base_damage, ic, imc, cc) =
+                resolve_wave(ref world, ref game, player);
 
             world.write_model(@game);
+
+            self.emit(Event::WaveResolved(WaveResolved {
+                player,
+                wave_number: game.wave_number,
+                enemy_outcomes,
+                kill_gold,
+                base_damage,
+                new_base_health: game.base_health,
+                new_gold: game.gold,
+                input_consumed: ic,
+                image_consumed: imc,
+                code_consumed: cc,
+            }));
         }
     }
 
     // ── Wave resolution ───────────────────────────────────────────────────────
+    // Simulates each enemy individually in spawn order.
+    // Token balances drain as towers fire, so later enemies face a weaker defence.
+    // Returns: (enemy_outcomes, kill_gold, base_damage, input_consumed, image_consumed, code_consumed)
 
     fn resolve_wave(
         ref world: dojo::world::WorldStorage,
         ref game: GameState,
         player: ContractAddress,
-    ) {
+    ) -> (u32, u32, u32, u32, u32, u32) {
         let wave = game.wave_number + 1;
         let (tj_count, co_count, hs_count) = wave_enemy_counts(wave);
 
-        // Token production from factories
+        // Compute token production and starting balances for this wave.
         let (input_prod, image_prod, code_prod) =
             compute_token_production(ref world, player, game.next_factory_id);
         let max_input = game.input_tokens + input_prod;
         let max_image = game.image_tokens + image_prod;
         let max_code  = game.code_tokens  + code_prod;
 
-        // Token tiers at wave start (snapshot before consumption)
-        let input_tier = get_token_tier_index(game.input_tokens, max_input);
-        let image_tier = get_token_tier_index(game.image_tokens, max_image);
-        let code_tier  = get_token_tier_index(game.code_tokens,  max_code);
+        // Mutable balances — drain as each enemy is processed.
+        let mut cur_input = max_input;
+        let mut cur_image = max_image;
+        let mut cur_code  = max_code;
 
-        // Accumulated damage dealt per enemy type by all towers combined
-        let mut dmg_vs_tj: u32 = 0;
-        let mut dmg_vs_co: u32 = 0;
-        let mut dmg_vs_hs: u32 = 0;
+        let mut kill_gold: u32 = 0;
+        let mut base_damage: u32 = 0;
+        let mut enemy_outcomes: u32 = 0;
+        let mut bit_pos: u32 = 0;
 
-        // Token consumption per type
-        let mut input_consumed: u32 = 0;
-        let mut image_consumed: u32 = 0;
-        let mut code_consumed:  u32 = 0;
+        // ── TextJailbreak group ───────────────────────────────────────────────
+        let mut i: u32 = 0;
+        loop {
+            if i >= tj_count { break; }
+            let (killed, ni, nim, nc) = process_enemy(
+                ref world, player, game.next_tower_id,
+                TJ_HP, TJ_SPEED_X100,
+                cur_input, cur_image, cur_code,
+                max_input, max_image, max_code,
+            );
+            if killed {
+                kill_gold += TJ_GOLD;
+                enemy_outcomes = enemy_outcomes | pow2_u32(bit_pos);
+            } else {
+                base_damage += TJ_BASE_DAMAGE;
+            }
+            cur_input = ni; cur_image = nim; cur_code = nc;
+            bit_pos += 1;
+            i += 1;
+        };
 
-        // Iterate all alive towers, accumulate damage and token consumption
+        // ── ContextOverflow group ─────────────────────────────────────────────
+        let mut i: u32 = 0;
+        loop {
+            if i >= co_count { break; }
+            let (killed, ni, nim, nc) = process_enemy(
+                ref world, player, game.next_tower_id,
+                CO_HP, CO_SPEED_X100,
+                cur_input, cur_image, cur_code,
+                max_input, max_image, max_code,
+            );
+            if killed {
+                kill_gold += CO_GOLD;
+                enemy_outcomes = enemy_outcomes | pow2_u32(bit_pos);
+            } else {
+                base_damage += CO_BASE_DAMAGE;
+            }
+            cur_input = ni; cur_image = nim; cur_code = nc;
+            bit_pos += 1;
+            i += 1;
+        };
+
+        // ── HalluSwarm group ──────────────────────────────────────────────────
+        let mut i: u32 = 0;
+        loop {
+            if i >= hs_count { break; }
+            let (killed, ni, nim, nc) = process_enemy(
+                ref world, player, game.next_tower_id,
+                HS_HP, HS_SPEED_X100,
+                cur_input, cur_image, cur_code,
+                max_input, max_image, max_code,
+            );
+            if killed {
+                kill_gold += HS_GOLD;
+                enemy_outcomes = enemy_outcomes | pow2_u32(bit_pos);
+            } else {
+                base_damage += HS_BASE_DAMAGE;
+            }
+            cur_input = ni; cur_image = nim; cur_code = nc;
+            bit_pos += 1;
+            i += 1;
+        };
+
+        // ── Apply results ─────────────────────────────────────────────────────
+        let wave_bonus = WAVE_GOLD_BASE + wave * WAVE_GOLD_PER_WAVE;
+        game.gold += kill_gold + wave_bonus;
+
+        let input_consumed = max_input.saturating_sub(cur_input);
+        let image_consumed = max_image.saturating_sub(cur_image);
+        let code_consumed  = max_code.saturating_sub(cur_code);
+
+        game.input_tokens = cur_input;
+        game.image_tokens = cur_image;
+        game.code_tokens  = cur_code;
+
+        game.wave_number = wave;
+        game.base_health = game.base_health.saturating_sub(base_damage);
+
+        if game.base_health == 0 { game.game_over = true; }
+        if !game.game_over && game.wave_number >= MAX_WAVES { game.victory = true; }
+
+        (enemy_outcomes, kill_gold, base_damage, input_consumed, image_consumed, code_consumed)
+    }
+
+    // ── Per-enemy simulation ──────────────────────────────────────────────────
+    // Each alive tower fires `compute_shots` times at this enemy using the
+    // current token tier.  Tokens for that tower type are drained before the
+    // next enemy is processed, so the defence weakens as the wave progresses.
+
+    fn process_enemy(
+        ref world: dojo::world::WorldStorage,
+        player: ContractAddress,
+        next_tower_id: u32,
+        enemy_hp: u32,
+        speed_x100: u32,
+        cur_input: u32, cur_image: u32, cur_code: u32,
+        max_input: u32, max_image: u32, max_code: u32,
+    ) -> (bool, u32, u32, u32) {
+        let mut total_dmg: u32 = 0;
+        let mut consume_input: u32 = 0;
+        let mut consume_image: u32 = 0;
+        let mut consume_code: u32 = 0;
+
         let mut tid: u32 = 0;
         loop {
-            if tid >= game.next_tower_id { break; }
+            if tid >= next_tower_id { break; }
             let tower: Tower = world.read_model((player, tid));
             if tower.is_alive {
                 let covered = count_path_cells_covered(tower.x, tower.y);
                 if covered > 0 {
-                    let tier: u32 = if tower.tower_type == 0 {
-                        input_tier
+                    let (cur_tok, max_tok) = if tower.tower_type == 0 {
+                        (cur_input, max_input)
                     } else if tower.tower_type == 1 {
-                        image_tier
+                        (cur_image, max_image)
                     } else {
-                        code_tier
+                        (cur_code, max_code)
                     };
 
-                    let dmg_mult  = tier_dmg_mult_x100(tier);
-                    let cooldown  = tier_cooldown_x100(tier);
-                    let base_dmg  = tower_base_damage(tower.tower_type);
+                    let tier     = get_token_tier_index(cur_tok, max_tok);
+                    let dmg_mult = tier_dmg_mult_x100(tier);
+                    let cooldown = tier_cooldown_x100(tier);
+                    let base_dmg = tower_base_damage(tower.tower_type);
 
-                    let shots_tj = compute_shots(covered, TJ_SPEED_X100, cooldown);
-                    let shots_co = compute_shots(covered, CO_SPEED_X100, cooldown);
-                    let shots_hs = compute_shots(covered, HS_SPEED_X100, cooldown);
+                    let shots    = compute_shots(covered, speed_x100, cooldown);
+                    total_dmg   += shots * base_dmg * dmg_mult / 100;
 
-                    // Damage contribution per enemy of each type
-                    dmg_vs_tj += shots_tj * base_dmg * dmg_mult / 100;
-                    dmg_vs_co += shots_co * base_dmg * dmg_mult / 100;
-                    dmg_vs_hs += shots_hs * base_dmg * dmg_mult / 100;
-
-                    // Total shots fired by this tower across all enemies this wave
-                    let total_shots =
-                        shots_tj * tj_count +
-                        shots_co * co_count +
-                        shots_hs * hs_count;
-                    let consumed = total_shots * TOKEN_COST_PER_SHOT;
-
+                    let consumed = shots * TOKEN_COST_PER_SHOT;
                     if tower.tower_type == 0 {
-                        input_consumed += consumed;
+                        consume_input += consumed;
                     } else if tower.tower_type == 1 {
-                        image_consumed += consumed;
+                        consume_image += consumed;
                     } else {
-                        code_consumed += consumed;
+                        consume_code += consumed;
                     }
                 }
             }
             tid += 1;
         };
 
-        // Cap consumption at what was available
-        if input_consumed > max_input { input_consumed = max_input; }
-        if image_consumed > max_image { image_consumed = max_image; }
-        if code_consumed  > max_code  { code_consumed  = max_code;  }
+        let new_input = cur_input.saturating_sub(consume_input);
+        let new_image = cur_image.saturating_sub(consume_image);
+        let new_code  = cur_code.saturating_sub(consume_code);
 
-        // Process each enemy group: killed or reaches base
-        let mut kill_gold:   u32 = 0;
-        let mut base_damage: u32 = 0;
+        (total_dmg >= enemy_hp, new_input, new_image, new_code)
+    }
 
-        // TextJailbreak
+    // ── Bit helpers ───────────────────────────────────────────────────────────
+    // Cairo 2.16 / Scarb 2.16.0 does not expose the << token; use explicit pow2.
+
+    fn pow2_u32(n: u32) -> u32 {
+        let mut result: u32 = 1;
         let mut i: u32 = 0;
         loop {
-            if i >= tj_count { break; }
-            if dmg_vs_tj >= TJ_HP {
-                kill_gold += TJ_GOLD;
-            } else {
-                base_damage += TJ_BASE_DAMAGE;
-            }
+            if i >= n { break; }
+            result *= 2;
             i += 1;
         };
-
-        // ContextOverflow
-        let mut i: u32 = 0;
-        loop {
-            if i >= co_count { break; }
-            if dmg_vs_co >= CO_HP {
-                kill_gold += CO_GOLD;
-            } else {
-                base_damage += CO_BASE_DAMAGE;
-            }
-            i += 1;
-        };
-
-        // HalluSwarm
-        let mut i: u32 = 0;
-        loop {
-            if i >= hs_count { break; }
-            if dmg_vs_hs >= HS_HP {
-                kill_gold += HS_GOLD;
-            } else {
-                base_damage += HS_BASE_DAMAGE;
-            }
-            i += 1;
-        };
-
-        // Wave bonus gold (computed on-chain, not trusted from client)
-        let wave_bonus = WAVE_GOLD_BASE + wave * WAVE_GOLD_PER_WAVE;
-        game.gold += kill_gold + wave_bonus;
-
-        // Update token balances
-        game.input_tokens = max_input.saturating_sub(input_consumed);
-        game.image_tokens = max_image.saturating_sub(image_consumed);
-        game.code_tokens  = max_code.saturating_sub(code_consumed);
-
-        // Advance wave
-        game.wave_number = wave;
-        game.base_health = game.base_health.saturating_sub(base_damage);
-
-        if game.base_health == 0 {
-            game.game_over = true;
-        }
-        if !game.game_over && game.wave_number >= MAX_WAVES {
-            game.victory = true;
-        }
+        result
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

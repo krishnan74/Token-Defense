@@ -58,7 +58,7 @@
     },
     {
       "address": "0x19769fe60733c1eea52f81ad367ad51b2329576032489f44f3d9972e82ee0bc",
-      "class_hash": "0x299e79b08cc406c2aca0b91f5dabbd577ae4ce1743865376d7fc7bd10fd0de7",
+      "class_hash": "0x35cf7be58b20608c33c8902656bb2d9569d5c0b5ace4e9864637419af9c7ad3",
       "init_calldata": [],
       "tag": "di-wave_system",
       "selector": "0x2327027e692be18fb4f0748d22913dc03a9fd35a5712d78033d792e4db2327c",
@@ -2379,6 +2379,68 @@
           "name": "WorldProviderEvent",
           "type": "dojo::contract::components::world_provider::world_provider_cpt::Event",
           "kind": "nested"
+        },
+        {
+          "name": "WaveResolved",
+          "type": "dojo_intro::systems::wave::wave_system::WaveResolved",
+          "kind": "nested"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "dojo_intro::systems::wave::wave_system::WaveResolved",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "player",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "key"
+        },
+        {
+          "name": "wave_number",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "enemy_outcomes",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "kill_gold",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "base_damage",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "new_base_health",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "new_gold",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "input_consumed",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "image_consumed",
+          "type": "core::integer::u32",
+          "kind": "data"
+        },
+        {
+          "name": "code_consumed",
+          "type": "core::integer::u32",
+          "kind": "data"
         }
       ]
     },

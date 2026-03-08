@@ -229,9 +229,20 @@ mod tests {
     // Wave 1 composition: 6 TJ, 0 CO, 0 HS
     // Wave 1 bonus gold: 50 + 1×10 = 60
     // TJ: hp=20, gold=2, base_damage=1, speed_x100=150
-    // GPT tower at (9,1): covers 8 path cells
-    //   shots_vs_TJ = round(8 * 1_000_000 / (150 * 100)) = round(533) = 5
-    //   damage_vs_TJ = 5 * 10 = 50 ≥ 20 → kills all TJ
+    //
+    // Per-enemy simulation with token drain (GPT tower at (9,1), 8 path cells):
+    //   max_input = INIT_INPUT_TOKENS = 50 (no factory), cur starts at 50.
+    //   Enemy 0: tier=Powered(50/50),  shots=5, dmg=50≥20 → killed, cur=40
+    //   Enemy 1: tier=Powered(40/50),  shots=5, dmg=50≥20 → killed, cur=30
+    //   Enemy 2: tier=Powered(30/50),  shots=5, dmg=50≥20 → killed, cur=20
+    //   Enemy 3: tier=Good(20/50=40%), shots=4, dmg=32≥20 → killed, cur=12
+    //   Enemy 4: tier=Low(12/50=24%),  shots=3, dmg=16<20 → survived, cur=6
+    //   Enemy 5: tier=Critical(6/50),  shots=2, dmg=6<20  → survived, cur=2
+    //   kill_gold=4×2=8, base_damage=2, gold=268, base_health=18, input_tokens=2
+    //
+    // With an Input factory (prod=30, max=80, cur starts at 80):
+    //   Enemy 0-3: Powered (dmg≥50), Enemy 4-5: Good (dmg=32≥20) → all 6 killed
+    //   kill_gold=12, base_damage=0, gold=172, base_health=20
 
     #[test]
     fn test_start_wave_no_towers_applies_base_damage() {
@@ -251,23 +262,46 @@ mod tests {
         assert(!state.game_over, 'should not be game over');
     }
 
+    // Token drain causes later enemies to face weaker towers.
+    // GPT tower at (9,1) kills enemies 0-3 (Powered/Good tier) but enemies 4-5 escape
+    // once tokens drain to Low/Critical tier.
     #[test]
-    fn test_start_wave_tower_kills_all_tj() {
+    fn test_start_wave_token_drain_partial_kills() {
         let player = starknet::contract_address_const::<0x1>();
         starknet::testing::set_contract_address(player);
 
         let (mut world, game, building, wave) = setup();
         game.new_game();
-        // GPT tower at (9,1) kills all 6 TJ
         building.place_tower(0, 9, 1);
         wave.start_wave();
 
         let state: GameState = world.read_model(player);
+        // 4 killed, 2 survived → base takes 2 damage
+        assert(state.base_health == BASE_MAX_HP - 2, 'wrong base health');
+        // kill_gold=8, wave_bonus=60 → 200+8+60=268
+        assert(state.gold == INIT_GOLD + 8 + 60, 'wrong gold partial kills');
+        // 48 tokens consumed across 6 enemies → 50-48=2 remaining
+        assert(state.input_tokens == 2, 'wrong remaining tokens');
+    }
+
+    // With enough token production, all enemies are killed even accounting for drain.
+    #[test]
+    fn test_start_wave_tower_kills_all_with_factory() {
+        let player = starknet::contract_address_const::<0x1>();
+        starknet::testing::set_contract_address(player);
+
+        let (mut world, game, building, wave) = setup();
+        game.new_game();
+        building.place_tower(0, 9, 1);
+        building.place_factory(0, 4, 4); // +30 input/wave → max=80
+        wave.start_wave();
+
+        let state: GameState = world.read_model(player);
+        // All 6 TJ killed → no base damage
         assert(state.base_health == BASE_MAX_HP, 'base should be full');
-        // kill_gold = 6×2 = 12, wave_bonus = 60 → gold = 200 + 12 + 60 = 272
-        assert(state.gold == INIT_GOLD + 12 + 60, 'wrong gold with kills');
-        // Tokens consumed: 5 shots/enemy × 6 enemies × 2 = 60 > max_input(50) → capped at 50
-        assert(state.input_tokens == 0, 'input tokens should be empty');
+        // kill_gold=12, wave_bonus=60, factory_cost=100 → 200-100+12+60=172
+        assert(state.gold == INIT_GOLD - INPUT_FACTORY_COST + 12 + 60, 'wrong gold all kills');
+        assert(!state.game_over, 'should not be game over');
     }
 
     #[test]

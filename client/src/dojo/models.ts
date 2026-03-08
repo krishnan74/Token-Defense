@@ -35,6 +35,21 @@ export interface Factory {
   is_active: boolean;
 }
 
+/** Decoded WaveResolved starknet event — emitted by wave_system.start_wave(). */
+export interface WaveResolvedEvent {
+  wave_number: number;
+  /** Bitmask: bit i = 1 if the i-th spawned enemy was killed.
+   *  Spawn order: TJ group first, then CO, then HS (matching WAVE_COMPOSITIONS). */
+  enemy_outcomes: number;
+  kill_gold: number;
+  base_damage: number;
+  new_base_health: number;
+  new_gold: number;
+  input_consumed: number;
+  image_consumed: number;
+  code_consumed: number;
+}
+
 /** Manifest contract entry shape. */
 export interface ManifestContract {
   tag: string;
