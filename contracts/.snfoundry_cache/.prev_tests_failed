@@ -1,0 +1,2 @@
+token_defense::tests::test_world::tests::test_new_game_resets_existing_state
+token_defense::tests::test_world::tests::test_new_game_initialises_state

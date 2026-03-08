@@ -34,7 +34,7 @@
   "contracts": [
     {
       "address": "0xd4a4c2d21088e19286e1d5c0711d063c2246e42ded194ab4315d46765c6789",
-      "class_hash": "0x6887f04c56904000f0524974c3846d668174c4d6091f5082fe530c8a2b4aec5",
+      "class_hash": "0xe63b63b92a9be314d856774b91b5b08af7474a88d5c94642542d2f0ebb8be1",
       "init_calldata": [],
       "tag": "td-building_system",
       "selector": "0x1dc9fd5061f947194027cc1d616788c6d3fb9a87b7a683d1da6fd0929f89305",
@@ -48,19 +48,21 @@
     },
     {
       "address": "0x4bb6b0105b495d3583522da9e3f21cfc82d959c1f6f95fb285968d567630785",
-      "class_hash": "0x11a6044c8e9c7adc3deb533196682a74b94319a55833ee3542c9390de7ada6d",
+      "class_hash": "0x10a836c6150d381e61dcfa9e918415fb50a33d81ff325616cb56cebd23b8678",
       "init_calldata": [],
       "tag": "td-game_system",
       "selector": "0x5181ca5c2a3ffae64a9316e77191f5182d81882d1589dbccff129ca3c48247c",
       "systems": [
+        "dojo_init",
         "new_game",
         "activate_overclock",
+        "initialize_egs",
         "upgrade"
       ]
     },
     {
       "address": "0x1bfe8ed70acd5c057dd8e6547a516150503963023a29acd4c6fc7872c63658f",
-      "class_hash": "0x55c3fa19a27b6792a56b26a80b41dccea54f489358f6f92cb6bbc7350a587bd",
+      "class_hash": "0x6dbe18c8a09f044a116cd3bdb5c415df80b8c2746ff65b3b47906b2d31fd9ae",
       "init_calldata": [],
       "tag": "td-wave_system",
       "selector": "0x518ab3d320fb24ae95e1805f87cd6d1647c0e625e3f79df2d74c9cd1ffee7d3",
@@ -110,7 +112,7 @@
           "key": false
         }
       ],
-      "class_hash": "0x7b7f7cf83355ab9fb0b7c7207f4df8e1833ab2edd23b8ad82f8dc9ec0427c85",
+      "class_hash": "0x74014482c0ff296ce4a7929dde6dc6a5a921279da8f91e890611d20c5580f8d",
       "tag": "td-Factory",
       "selector": "0x3784729529133337d151952f35e36b53abc24dfbb50314539ddc068dd2b2ec9"
     },
@@ -187,7 +189,7 @@
           "key": false
         }
       ],
-      "class_hash": "0x56cc55d80d665f44733b160f7254e91acb1f969e8e0cd0acbbb00de1cf7b5a1",
+      "class_hash": "0x6ea721fc85964267c8685eeb5a3d8dbc75775cfe20d09fdd32fc511648bba5c",
       "tag": "td-GameState",
       "selector": "0x704f790bf4db3b2cafb9ac377c32b9a25a92787a526b6cea62d7d1a4f37738b"
     },
@@ -239,7 +241,7 @@
           "key": false
         }
       ],
-      "class_hash": "0x4216d6afe9043acba9e14ee32b8c03aa9528720c03ed866ecd8954b810907dc",
+      "class_hash": "0x3e47dfbe4d4593819ff51522d7d0802c51b7f50ce583cae6ab2eaeb70b2ab42",
       "tag": "td-Tower",
       "selector": "0x4f3f0e499e57482f07ed4d079f0917a820a722d5aa73297c658ac169b8f658a"
     }
@@ -343,6 +345,16 @@
       ]
     },
     {
+      "type": "struct",
+      "name": "core::array::Span::<game_components_interfaces::structs::metagame::GameContext>",
+      "members": [
+        {
+          "name": "snapshot",
+          "type": "@core::array::Array::<game_components_interfaces::structs::metagame::GameContext>"
+        }
+      ]
+    },
+    {
       "type": "enum",
       "name": "core::bool",
       "variants": [
@@ -376,11 +388,81 @@
     },
     {
       "type": "enum",
+      "name": "core::option::Option::<core::byte_array::ByteArray>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "core::byte_array::ByteArray"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
+      "name": "core::option::Option::<core::felt252>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "core::felt252"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
       "name": "core::option::Option::<core::integer::u32>",
       "variants": [
         {
           "name": "Some",
           "type": "core::integer::u32"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
+      "name": "core::option::Option::<core::integer::u64>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "core::integer::u64"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
+      "name": "core::option::Option::<core::starknet::contract_address::ContractAddress>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "core::starknet::contract_address::ContractAddress"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
+      "name": "core::option::Option::<game_components_interfaces::structs::metagame::GameContextDetails>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "game_components_interfaces::structs::metagame::GameContextDetails"
         },
         {
           "name": "None",
@@ -2028,8 +2110,294 @@
       "state_mutability": "view"
     },
     {
+      "type": "function",
+      "name": "ensure_abi",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "token_defense::models::Tower"
+        }
+      ],
+      "outputs": [],
+      "state_mutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "ensure_unique",
+      "inputs": [],
+      "outputs": [],
+      "state_mutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "ensure_values",
+      "inputs": [
+        {
+          "name": "value",
+          "type": "token_defense::models::TowerValue"
+        }
+      ],
+      "outputs": [],
+      "state_mutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent::Event",
+      "kind": "enum",
+      "variants": []
+    },
+    {
+      "type": "interface",
+      "name": "game_components_interfaces::minigame::core::IMinigame",
+      "items": [
+        {
+          "type": "function",
+          "name": "token_address",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "settings_address",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "objectives_address",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "mint_game",
+          "inputs": [
+            {
+              "name": "player_name",
+              "type": "core::option::Option::<core::felt252>"
+            },
+            {
+              "name": "settings_id",
+              "type": "core::option::Option::<core::integer::u32>"
+            },
+            {
+              "name": "start",
+              "type": "core::option::Option::<core::integer::u64>"
+            },
+            {
+              "name": "end",
+              "type": "core::option::Option::<core::integer::u64>"
+            },
+            {
+              "name": "objective_id",
+              "type": "core::option::Option::<core::integer::u32>"
+            },
+            {
+              "name": "context",
+              "type": "core::option::Option::<game_components_interfaces::structs::metagame::GameContextDetails>"
+            },
+            {
+              "name": "client_url",
+              "type": "core::option::Option::<core::byte_array::ByteArray>"
+            },
+            {
+              "name": "renderer_address",
+              "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+            },
+            {
+              "name": "skills_address",
+              "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+            },
+            {
+              "name": "to",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "soulbound",
+              "type": "core::bool"
+            },
+            {
+              "name": "paymaster",
+              "type": "core::bool"
+            },
+            {
+              "name": "salt",
+              "type": "core::integer::u16"
+            },
+            {
+              "name": "metadata",
+              "type": "core::integer::u16"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::felt252"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "mint_game_batch",
+          "inputs": [
+            {
+              "name": "mints",
+              "type": "core::array::Array::<game_components_interfaces::structs::minigame::MintGameParams>"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::array::Array::<core::felt252>"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
       "type": "struct",
-      "name": "dojo_intro::models::Factory",
+      "name": "game_components_interfaces::structs::metagame::GameContext",
+      "members": [
+        {
+          "name": "name",
+          "type": "core::felt252"
+        },
+        {
+          "name": "value",
+          "type": "core::felt252"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "game_components_interfaces::structs::metagame::GameContextDetails",
+      "members": [
+        {
+          "name": "name",
+          "type": "core::byte_array::ByteArray"
+        },
+        {
+          "name": "description",
+          "type": "core::byte_array::ByteArray"
+        },
+        {
+          "name": "id",
+          "type": "core::option::Option::<core::integer::u32>"
+        },
+        {
+          "name": "context",
+          "type": "core::array::Span::<game_components_interfaces::structs::metagame::GameContext>"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "game_components_interfaces::structs::minigame::MintGameParams",
+      "members": [
+        {
+          "name": "player_name",
+          "type": "core::option::Option::<core::felt252>"
+        },
+        {
+          "name": "settings_id",
+          "type": "core::option::Option::<core::integer::u32>"
+        },
+        {
+          "name": "start",
+          "type": "core::option::Option::<core::integer::u64>"
+        },
+        {
+          "name": "end",
+          "type": "core::option::Option::<core::integer::u64>"
+        },
+        {
+          "name": "objective_id",
+          "type": "core::option::Option::<core::integer::u32>"
+        },
+        {
+          "name": "context",
+          "type": "core::option::Option::<game_components_interfaces::structs::metagame::GameContextDetails>"
+        },
+        {
+          "name": "client_url",
+          "type": "core::option::Option::<core::byte_array::ByteArray>"
+        },
+        {
+          "name": "renderer_address",
+          "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+        },
+        {
+          "name": "skills_address",
+          "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+        },
+        {
+          "name": "to",
+          "type": "core::starknet::contract_address::ContractAddress"
+        },
+        {
+          "name": "soulbound",
+          "type": "core::bool"
+        },
+        {
+          "name": "paymaster",
+          "type": "core::bool"
+        },
+        {
+          "name": "salt",
+          "type": "core::integer::u16"
+        },
+        {
+          "name": "metadata",
+          "type": "core::integer::u16"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "openzeppelin_interfaces::introspection::ISRC5",
+      "items": [
+        {
+          "type": "function",
+          "name": "supports_interface",
+          "inputs": [
+            {
+              "name": "interface_id",
+              "type": "core::felt252"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "openzeppelin_introspection::src5::SRC5Component::Event",
+      "kind": "enum",
+      "variants": []
+    },
+    {
+      "type": "struct",
+      "name": "token_defense::models::Factory",
       "members": [
         {
           "name": "token_id",
@@ -2063,7 +2431,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::FactoryValue",
+      "name": "token_defense::models::FactoryValue",
       "members": [
         {
           "name": "factory_type",
@@ -2089,7 +2457,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::GameState",
+      "name": "token_defense::models::GameState",
       "members": [
         {
           "name": "token_id",
@@ -2151,7 +2519,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::GameStateValue",
+      "name": "token_defense::models::GameStateValue",
       "members": [
         {
           "name": "player",
@@ -2209,7 +2577,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::Tower",
+      "name": "token_defense::models::Tower",
       "members": [
         {
           "name": "token_id",
@@ -2251,7 +2619,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::TowerValue",
+      "name": "token_defense::models::TowerValue",
       "members": [
         {
           "name": "tower_type",
@@ -2285,25 +2653,25 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::models::m_Factory::Event",
+      "name": "token_defense::models::m_Factory::Event",
       "kind": "enum",
       "variants": []
     },
     {
       "type": "event",
-      "name": "dojo_intro::models::m_GameState::Event",
+      "name": "token_defense::models::m_GameState::Event",
       "kind": "enum",
       "variants": []
     },
     {
       "type": "event",
-      "name": "dojo_intro::models::m_Tower::Event",
+      "name": "token_defense::models::m_Tower::Event",
       "kind": "enum",
       "variants": []
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::building::IBuildingSystem",
+      "name": "token_defense::systems::building::IBuildingSystem",
       "items": [
         {
           "type": "function",
@@ -2389,7 +2757,7 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::building::building_system::Event",
+      "name": "token_defense::systems::building::building_system::Event",
       "kind": "enum",
       "variants": [
         {
@@ -2406,7 +2774,7 @@
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::game::IGameSystem",
+      "name": "token_defense::systems::game::IGameSystem",
       "items": [
         {
           "type": "function",
@@ -2433,6 +2801,13 @@
               "type": "core::felt252"
             }
           ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "initialize_egs",
+          "inputs": [],
           "outputs": [],
           "state_mutability": "external"
         },
@@ -2504,7 +2879,7 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::game::game_system::Event",
+      "name": "token_defense::systems::game::game_system::Event",
       "kind": "enum",
       "variants": [
         {
@@ -2516,12 +2891,22 @@
           "name": "WorldProviderEvent",
           "type": "dojo::contract::components::world_provider::world_provider_cpt::Event",
           "kind": "nested"
+        },
+        {
+          "name": "MinigameEvent",
+          "type": "game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent::Event",
+          "kind": "flat"
+        },
+        {
+          "name": "SRC5Event",
+          "type": "openzeppelin_introspection::src5::SRC5Component::Event",
+          "kind": "flat"
         }
       ]
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::wave::IWaveSystem",
+      "name": "token_defense::systems::wave::IWaveSystem",
       "items": [
         {
           "type": "function",
@@ -2539,7 +2924,7 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::wave::wave_system::Event",
+      "name": "token_defense::systems::wave::wave_system::Event",
       "kind": "enum",
       "variants": [
         {
@@ -2554,14 +2939,14 @@
         },
         {
           "name": "WaveResolved",
-          "type": "dojo_intro::systems::wave::wave_system::WaveResolved",
+          "type": "token_defense::systems::wave::wave_system::WaveResolved",
           "kind": "nested"
         }
       ]
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::wave::wave_system::WaveResolved",
+      "name": "token_defense::systems::wave::wave_system::WaveResolved",
       "kind": "struct",
       "members": [
         {
@@ -2615,37 +3000,6 @@
           "kind": "data"
         }
       ]
-    },
-    {
-      "type": "function",
-      "name": "ensure_abi",
-      "inputs": [
-        {
-          "name": "model",
-          "type": "dojo_intro::models::Tower"
-        }
-      ],
-      "outputs": [],
-      "state_mutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "ensure_unique",
-      "inputs": [],
-      "outputs": [],
-      "state_mutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "ensure_values",
-      "inputs": [
-        {
-          "name": "value",
-          "type": "dojo_intro::models::TowerValue"
-        }
-      ],
-      "outputs": [],
-      "state_mutability": "view"
     }
   ]
 }

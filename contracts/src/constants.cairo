@@ -1,3 +1,8 @@
+// ── EGS / Denshokan ───────────────────────────────────────────────────────────
+// Shared Denshokan MinigameToken (ERC721) on Sepolia — used for pre/post_action.
+pub const DENSHOKAN_ADDRESS: felt252 =
+    0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467;
+
 // ── Tower constants ───────────────────────────────────────────────────────────
 pub const GPT_MAX_HP: u32 = 100;
 pub const VISION_MAX_HP: u32 = 80;

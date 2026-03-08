@@ -7,15 +7,15 @@ mod tests {
         WorldStorageTestTrait,
     };
 
-    use dojo_intro::models::{GameState, Tower, Factory, m_GameState, m_Tower, m_Factory};
-    use dojo_intro::systems::game::{game_system, IGameSystemDispatcher, IGameSystemDispatcherTrait};
-    use dojo_intro::systems::building::{
+    use token_defense::models::{GameState, Tower, Factory, m_GameState, m_Tower, m_Factory};
+    use token_defense::systems::game::{game_system, IGameSystemDispatcher, IGameSystemDispatcherTrait};
+    use token_defense::systems::building::{
         building_system, IBuildingSystemDispatcher, IBuildingSystemDispatcherTrait,
     };
-    use dojo_intro::systems::wave::{
+    use token_defense::systems::wave::{
         wave_system, IWaveSystemDispatcher, IWaveSystemDispatcherTrait,
     };
-    use dojo_intro::constants::{
+    use token_defense::constants::{
         INIT_GOLD, INIT_INPUT_TOKENS, INIT_IMAGE_TOKENS, INIT_CODE_TOKENS, BASE_MAX_HP,
         UPGRADE_COST, INPUT_FACTORY_COST, GPT_MAX_HP, WAVE_GOLD_BASE, WAVE_GOLD_PER_WAVE,
         TJ_GOLD, TJ_BASE_DAMAGE, INPUT_TOKENS_BASE, MAX_TOKEN_BALANCE, tower_upgrade_cost,

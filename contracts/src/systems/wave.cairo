@@ -11,6 +11,7 @@ pub mod wave_system {
     use core::num::traits::SaturatingSub;
     use crate::models::{GameState, Tower, Factory};
     use crate::constants::{
+        DENSHOKAN_ADDRESS,
         MAX_WAVES, WAVE_GOLD_BASE, WAVE_GOLD_PER_WAVE,
         TOKEN_COST_PER_SHOT, MAX_TOKEN_BALANCE,
         TJ_HP, TJ_SPEED_X100, TJ_GOLD, TJ_BASE_DAMAGE,
@@ -23,6 +24,7 @@ pub mod wave_system {
         tower_base_damage, tower_damage_multiplier_x100,
         compute_shots, count_path_cells_covered,
     };
+    use game_components_embeddable_game_standard::minigame::minigame::{pre_action, post_action};
 
     // ── Event emitted when a wave resolves ────────────────────────────────────
     // enemy_outcomes: bitmask — bit i = 1 if the i-th spawned enemy was killed.
@@ -51,6 +53,9 @@ pub mod wave_system {
     #[abi(embed_v0)]
     impl WaveSystemImpl of IWaveSystem<ContractState> {
         fn start_wave(ref self: ContractState, token_id: felt252) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
             let mut world = self.world_default();
             let caller = get_caller_address();
 
@@ -77,6 +82,8 @@ pub mod wave_system {
                 image_consumed: imc,
                 code_consumed: cc,
             }));
+
+            post_action(denshokan, token_id);
         }
     }
 

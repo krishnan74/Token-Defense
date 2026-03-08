@@ -2,7 +2,7 @@
   "world": {
     "class_hash": "0x206b18ee1b2e79f5ad30f5871be57354bf81feb9f88e0ac10d829a3208932b0",
     "address": "0x6e075b911d34e634b432de21fb25bf402d70e7cba4d182a41927a75adff4965",
-    "seed": "dojo_intro",
+    "seed": "token_defense",
     "name": "Dojo intro",
     "entrypoints": [
       "set_entity_test",
@@ -2096,7 +2096,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::Factory",
+      "name": "token_defense::models::Factory",
       "members": [
         {
           "name": "player",
@@ -2130,7 +2130,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::FactoryValue",
+      "name": "token_defense::models::FactoryValue",
       "members": [
         {
           "name": "factory_type",
@@ -2156,7 +2156,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::GameState",
+      "name": "token_defense::models::GameState",
       "members": [
         {
           "name": "player",
@@ -2206,7 +2206,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::GameStateValue",
+      "name": "token_defense::models::GameStateValue",
       "members": [
         {
           "name": "wave_number",
@@ -2252,7 +2252,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::Tower",
+      "name": "token_defense::models::Tower",
       "members": [
         {
           "name": "player",
@@ -2290,7 +2290,7 @@
     },
     {
       "type": "struct",
-      "name": "dojo_intro::models::TowerValue",
+      "name": "token_defense::models::TowerValue",
       "members": [
         {
           "name": "tower_type",
@@ -2320,25 +2320,25 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::models::m_Factory::Event",
+      "name": "token_defense::models::m_Factory::Event",
       "kind": "enum",
       "variants": []
     },
     {
       "type": "event",
-      "name": "dojo_intro::models::m_GameState::Event",
+      "name": "token_defense::models::m_GameState::Event",
       "kind": "enum",
       "variants": []
     },
     {
       "type": "event",
-      "name": "dojo_intro::models::m_Tower::Event",
+      "name": "token_defense::models::m_Tower::Event",
       "kind": "enum",
       "variants": []
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::building::IBuildingSystem",
+      "name": "token_defense::systems::building::IBuildingSystem",
       "items": [
         {
           "type": "function",
@@ -2396,7 +2396,7 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::building::building_system::Event",
+      "name": "token_defense::systems::building::building_system::Event",
       "kind": "enum",
       "variants": [
         {
@@ -2413,7 +2413,7 @@
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::game::IGameSystem",
+      "name": "token_defense::systems::game::IGameSystem",
       "items": [
         {
           "type": "function",
@@ -2426,7 +2426,7 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::game::game_system::Event",
+      "name": "token_defense::systems::game::game_system::Event",
       "kind": "enum",
       "variants": [
         {
@@ -2443,7 +2443,7 @@
     },
     {
       "type": "interface",
-      "name": "dojo_intro::systems::wave::IWaveSystem",
+      "name": "token_defense::systems::wave::IWaveSystem",
       "items": [
         {
           "type": "function",
@@ -2456,7 +2456,7 @@
     },
     {
       "type": "event",
-      "name": "dojo_intro::systems::wave::wave_system::Event",
+      "name": "token_defense::systems::wave::wave_system::Event",
       "kind": "enum",
       "variants": [
         {
@@ -2477,7 +2477,7 @@
       "inputs": [
         {
           "name": "model",
-          "type": "dojo_intro::models::Tower"
+          "type": "token_defense::models::Tower"
         }
       ],
       "outputs": [],
@@ -2496,7 +2496,7 @@
       "inputs": [
         {
           "name": "value",
-          "type": "dojo_intro::models::TowerValue"
+          "type": "token_defense::models::TowerValue"
         }
       ],
       "outputs": [],

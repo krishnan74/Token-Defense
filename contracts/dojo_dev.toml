@@ -1,7 +1,7 @@
 [world]
-name = "Dojo intro"
-description = "A simple intro to Dojo."
-seed = "dojo_intro"
+name = "Token Defense"
+description = "A fully on-chain tower defense game on StarkNet. Defend your AI base from prompt injection attacks across 10 waves."
+seed = "token_defense"
 
 [namespace]
 default = "td"

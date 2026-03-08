@@ -12,11 +12,15 @@ pub mod building_system {
     use starknet::get_caller_address;
     use dojo::model::ModelStorage;
     use crate::models::{GameState, Tower, Factory};
-    use crate::constants::{UPGRADE_COST, tower_max_hp, factory_cost, tower_upgrade_cost};
+    use crate::constants::{UPGRADE_COST, tower_max_hp, factory_cost, tower_upgrade_cost, DENSHOKAN_ADDRESS};
+    use game_components_embeddable_game_standard::minigame::minigame::{pre_action, post_action};
 
     #[abi(embed_v0)]
     impl BuildingSystemImpl of IBuildingSystem<ContractState> {
         fn place_tower(ref self: ContractState, token_id: felt252, tower_type: u8, x: u32, y: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
             let mut world = self.world_default();
             let caller = get_caller_address();
 
@@ -42,9 +46,13 @@ pub mod building_system {
             game.next_tower_id += 1;
             world.write_model(@tower);
             world.write_model(@game);
+            post_action(denshokan, token_id);
         }
 
         fn place_factory(ref self: ContractState, token_id: felt252, factory_type: u8, x: u32, y: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
             let mut world = self.world_default();
             let caller = get_caller_address();
 
@@ -71,9 +79,13 @@ pub mod building_system {
             game.next_factory_id += 1;
             world.write_model(@factory);
             world.write_model(@game);
+            post_action(denshokan, token_id);
         }
 
         fn upgrade_factory(ref self: ContractState, token_id: felt252, factory_id: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
             let mut world = self.world_default();
             let caller = get_caller_address();
 
@@ -90,9 +102,13 @@ pub mod building_system {
 
             world.write_model(@factory);
             world.write_model(@game);
+            post_action(denshokan, token_id);
         }
 
         fn upgrade_tower(ref self: ContractState, token_id: felt252, tower_id: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
             let mut world = self.world_default();
             let caller = get_caller_address();
 
@@ -112,6 +128,7 @@ pub mod building_system {
 
             world.write_model(@tower);
             world.write_model(@game);
+            post_action(denshokan, token_id);
         }
     }
 
