@@ -141,10 +141,10 @@ All source files are TypeScript (`.ts`/`.tsx`). `WaveSimulator.js` and `WaveRepl
 
 ### Key Game Constants
 
-- Grid: 14×8 tiles, tower range: 3 tiles
+- Grid: 12×8 tiles, tower range: 3 tiles
 - Token tiers: ≥60% Powered(1.0x dmg), ≥35% Good(0.8x), ≥15% Low(0.55x), ≥1% Critical(0.3x), Offline(0.15x)
-- Starting gold: Easy=300 / Normal=200 / Hard=120; gold per wave: 50 + wave×10 (on-chain)
-- Max waves: 10; base HP: Easy=30 / Normal=20 / Hard=10
+- Starting gold: Easy=300 / Normal=200 / Hard=120; gold per wave: 60 + wave×15 (on-chain)
+- Max waves: 10; base HP: Easy=35 / Normal=25 / Hard=12; max active towers: 14
 - Tower upgrades: L1→L2 costs 80g (+30% dmg), L2→L3 costs 120g (+65% dmg vs L1)
 - Overclock: costs 50g; halves all tower cooldowns for one wave
 

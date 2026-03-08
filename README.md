@@ -59,7 +59,7 @@ token-defense/
 
 ## Game Overview
 
-**Grid:** 14×8 tiles. Enemy path is fixed — build around it.
+**Grid:** 12×8 tiles. Enemy path is fixed — build around it.
 
 **Enemy path:** `(entrance, y=1) → (9,1) → (9,3) → (5,3) → (5,6) → base (0,6)`
 
@@ -177,11 +177,11 @@ sozo migrate --profile sepolia
 # Re-register with Denshokan after deploy
 sozo execute td-game_system initialize_egs --profile sepolia
 
-# Local dev (Katana + migrate + Torii)
-scarb run dev
+# Local dev (Katana + build + migrate + Torii — all-in-one)
+./dev.sh
 
 # Tests
-snforge test
+sozo test
 ```
 
 > Always run `scarb --profile sepolia build` before `sozo migrate` — sozo won't detect changes otherwise.
