@@ -2,9 +2,17 @@
  * WaveReplay — animates a wave whose outcome is known exactly from on-chain data.
  *
  * Receives `enemyOutcomes` — a bitmask where bit i = 1 if the i-th spawned
- * enemy was killed (spawn order: TJ group, CO group, HS group).
+ * enemy was killed (spawn order: TJ group, CO group, HS group, Boss group).
  * Each enemy independently knows its fate, so the animation faithfully mirrors
  * the contract's per-enemy simulation rather than group-level approximations.
+ *
+ * New features mirrored from the contract:
+ *   - Wave modifier (Fast/Armored) applied to all enemies
+ *   - Per-enemy traits (Armored/Fast) on selected spawn indices (wave ≥ 5)
+ *   - Boss enemy group (waves 5, 10)
+ *   - Tower level damage multiplier (levels 1-3)
+ *   - Tower synergy bonus (+20% damage for adjacent towers of different types)
+ *   - Overclock ability (halves all tower cooldowns for this wave)
  */
 
 import {
@@ -17,6 +25,9 @@ import {
   TOWER_RANGE,
   TOWERS,
   WAVE_COMPOSITIONS,
+  getWaveModifier,
+  getEnemyTrait,
+  getTowerLevelMultiplier,
 } from '../constants.js';
 
 let _nextId = 0;
@@ -82,21 +93,26 @@ function computeKillProgress(towers) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Build spawn queue with an `enemyIndex` field so each enemy can look up its
- * outcome in the bitmask.  Order matches the contract: TJ first, then CO, HS.
+ * Build spawn queue. Mirrors the contract's spawn order exactly:
+ * TJ group → CO group → HS group → Boss group.
+ * Each entry carries enemyIndex (global), group (0-3), and indexInGroup
+ * for modifier and trait lookups.
  */
 function buildSpawnQueue(waveNumber) {
   const composition = WAVE_COMPOSITIONS[waveNumber] ?? WAVE_COMPOSITIONS[10];
   const queue = [];
   let delay = 0;
   let enemyIndex = 0;
+  let groupIndex = 0;
   for (const group of composition) {
     for (let i = 0; i < group.count; i++) {
-      queue.push({ type: group.type, delay, enemyIndex });
-      delay += 0.55;
+      queue.push({ type: group.type, delay, enemyIndex, group: groupIndex, indexInGroup: i });
+      // Boss spawns alone with a longer gap; others at 0.55s intervals
+      delay += group.type === 'Boss' ? 0 : 0.55;
       enemyIndex++;
     }
     delay += 1.2;
+    groupIndex++;
   }
   return queue;
 }
@@ -113,6 +129,11 @@ function computeMaxTokens(factories, gameState) {
     if (!def) continue;
     const output = Math.floor(def.baseOutput * (1 + 0.5 * (Number(f.level) - 1)));
     tokens[def.tokenType] = (tokens[def.tokenType] ?? 0) + output;
+  }
+  // Mirror contract cap: MAX_TOKEN_BALANCE = 150
+  const CAP = 150;
+  for (const key of Object.keys(tokens)) {
+    if (tokens[key] > CAP) tokens[key] = CAP;
   }
   return tokens;
 }
@@ -131,6 +152,9 @@ export class WaveReplay {
    */
   constructor({ towers, factories, gameState, waveNumber, enemyOutcomes, baseDamageTaken }) {
     this._enemyOutcomes = enemyOutcomes >>> 0; // treat as unsigned 32-bit
+    this._waveNumber    = waveNumber;
+    this._waveModifier  = getWaveModifier(waveNumber); // 0=None,1=Fast,2=Armored
+    this._overclockActive = !!(gameState?.overclock_used);
 
     // Base health starts at PRE-wave value; drains as enemies arrive.
     this.baseHealth      = Number(gameState.base_health ?? 20);
@@ -146,6 +170,7 @@ export class WaveReplay {
       .map((t) => ({
         ...t,
         health:       Number(t.health),
+        level:        Number(t.level) || 1,
         target:       null,
         fireCooldown: 0,
         attackFlash:  0,
@@ -207,8 +232,8 @@ export class WaveReplay {
     let i = 0;
     while (i < this.spawnQueue.length) {
       if (this.spawnTimer >= this.spawnQueue[i].delay) {
-        const { type, enemyIndex } = this.spawnQueue[i];
-        this.enemies.push(this._buildEnemy(type, enemyIndex));
+        const { type, enemyIndex, group, indexInGroup } = this.spawnQueue[i];
+        this.enemies.push(this._buildEnemy(type, enemyIndex, group, indexInGroup));
         this.spawnQueue.splice(i, 1);
       } else {
         i++;
@@ -217,22 +242,38 @@ export class WaveReplay {
     if (this.spawnQueue.length === 0) this._allSpawned = true;
   }
 
-  _buildEnemy(type, enemyIndex) {
-    const def = ENEMIES[type];
+  _buildEnemy(type, enemyIndex, group, indexInGroup) {
+    const def = ENEMIES[type] ?? ENEMIES['TextJailbreak'];
     const wp0 = PATH_WAYPOINTS[0];
     const killed = !!((this._enemyOutcomes >>> enemyIndex) & 1);
+
+    // Apply wave modifier: 1=Fast(speed×1.5), 2=Armored(HP×1.5)
+    let hp    = def.hp;
+    let speed = def.speed;
+    if (this._waveModifier === 2) hp    = Math.floor(hp    * 1.5);
+    if (this._waveModifier === 1) speed = speed * 1.5;
+
+    // Apply per-enemy trait (only for non-boss enemies, from wave 5)
+    if (type !== 'Boss') {
+      const trait = getEnemyTrait(this._waveNumber, group, indexInGroup);
+      if (trait === 1) hp    = Math.floor(hp    * 1.5); // Armored trait
+      if (trait === 2) speed = speed * 1.5;             // Fast trait
+    }
+
     return {
       id:            uid(),
       type,
       enemyIndex,
-      killed,          // true = this enemy was killed on-chain
+      group,
+      indexInGroup,
+      killed,
       x:             wp0.x,
       y:             wp0.y,
       waypointIndex: 1,
       pathProgress:  0,
-      hp:            def.hp,
-      maxHp:         def.hp,
-      speed:         def.speed,
+      hp,
+      maxHp: hp,
+      speed,
       gold:          def.gold,
       alive:         true,
       hitFlash:      0,
@@ -286,7 +327,9 @@ export class WaveReplay {
       if ((this.tokens[tokenKey] ?? 0) >= tDef.tokenCost) {
         this.tokens[tokenKey] -= tDef.tokenCost;
       }
-      tower.fireCooldown = tier.cooldown;
+
+      // Overclock: halve cooldown (doubles fire rate).
+      tower.fireCooldown = this._overclockActive ? tier.cooldown / 2 : tier.cooldown;
 
       const target = this._nearestEnemy(tower);
       if (!target) continue;
@@ -305,7 +348,9 @@ export class WaveReplay {
       // Only deal real damage to enemies marked as killed on-chain.
       // Survivors are visually immune — they march through.
       if (target.killed) {
-        const damage = Math.round(tDef.damage * tier.dmgMultiplier);
+        const levelMult   = getTowerLevelMultiplier(tower.level);
+        const synergyMult = this._hasSynergyNeighbor(tower) ? 1.2 : 1.0;
+        const damage = Math.round(tDef.damage * tier.dmgMultiplier * levelMult * synergyMult);
         target.hp      -= damage;
         target.hitFlash = 0.1;
 
@@ -331,16 +376,32 @@ export class WaveReplay {
     return best;
   }
 
+  /** Returns true if the tower has an adjacent (Manhattan dist=1) alive tower of a different type. */
+  _hasSynergyNeighbor(tower) {
+    const tx    = Number(tower.x);
+    const ty    = Number(tower.y);
+    const ttype = Number(tower.tower_type);
+    return this.towers.some((t) => {
+      if (t === tower || !t.is_alive) return false;
+      if (Number(t.tower_type) === ttype) return false;
+      const dx = Math.abs(Number(t.x) - tx);
+      const dy = Math.abs(Number(t.y) - ty);
+      return dx + dy === 1;
+    });
+  }
+
   _killEnemy(enemy) {
     enemy.alive = false;
 
-    for (let p = 0; p < 7; p++) {
-      const angle = (p / 7) * Math.PI * 2;
+    const particleCount = enemy.type === 'Boss' ? 14 : 7;
+    for (let p = 0; p < particleCount; p++) {
+      const angle = (p / particleCount) * Math.PI * 2;
       this.particles.push({
         id: uid(), x: enemy.x, y: enemy.y,
         vx: Math.cos(angle) * (1.2 + Math.random() * 0.8),
         vy: Math.sin(angle) * (1.2 + Math.random() * 0.8),
-        color: '#FFA726', age: 0, maxAge: 0.45 + Math.random() * 0.15,
+        color: enemy.type === 'Boss' ? '#9B59B6' : '#FFA726',
+        age: 0, maxAge: 0.45 + Math.random() * 0.15,
       });
     }
     this.floatingTexts.push({
@@ -366,8 +427,9 @@ export class WaveReplay {
         age: 0, maxAge: 0.9,
       });
     }
-    for (let p = 0; p < 5; p++) {
-      const angle = (p / 5) * Math.PI * 2;
+    const particleCount = enemy.type === 'Boss' ? 10 : 5;
+    for (let p = 0; p < particleCount; p++) {
+      const angle = (p / particleCount) * Math.PI * 2;
       this.particles.push({
         id: uid(), x: BASE_X + 0.5, y: BASE_Y + 0.5,
         vx: Math.cos(angle) * 0.8, vy: Math.sin(angle) * 0.8,

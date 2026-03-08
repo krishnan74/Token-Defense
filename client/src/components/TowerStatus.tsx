@@ -1,16 +1,18 @@
-import { BASE_MAX_HP, FACTORIES, TOWERS } from '../constants';
+import { BASE_MAX_HP, FACTORIES, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp } from '../constants';
 import type { Factory, Tower } from '../dojo/models';
 
 interface TowerStatusProps {
   towers: unknown[];
   factories: unknown[];
-  gameState: { gold?: number; is_wave_active?: boolean; base_health?: number } | null;
+  gameState: { gold?: number; is_wave_active?: boolean; base_health?: number; difficulty?: number } | null;
   onUpgrade: (factoryId: number | string) => void;
+  onUpgradeTower: (towerId: number | string) => void;
 }
 
-export default function TowerStatus({ towers, factories, onUpgrade, gameState }: TowerStatusProps) {
-  const baseHealth = gameState?.base_health ?? BASE_MAX_HP;
-  const basePct    = BASE_MAX_HP > 0 ? baseHealth / BASE_MAX_HP : 0;
+export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, gameState }: TowerStatusProps) {
+  const maxHp     = getDifficultyBaseHp(gameState?.difficulty ?? 1);
+  const baseHealth = gameState?.base_health ?? maxHp;
+  const basePct    = maxHp > 0 ? baseHealth / maxHp : 0;
   const hpColor    = basePct > 0.6 ? '#5CB85C' : basePct > 0.3 ? '#F0AD4E' : '#D9534F';
 
   return (
@@ -22,7 +24,7 @@ export default function TowerStatus({ towers, factories, onUpgrade, gameState }:
         <div style={styles.cardRow}>
           <span style={styles.cardName}>STRONGHOLD</span>
           <span style={{ ...styles.badge, background: hpColor, color: '#1A0D05' }}>
-            {baseHealth}/{BASE_MAX_HP}
+            {baseHealth}/{maxHp}
           </span>
         </div>
         <div style={styles.hpTrack}>
@@ -39,17 +41,32 @@ export default function TowerStatus({ towers, factories, onUpgrade, gameState }:
         const pct   = maxHp > 0 ? (hp / maxHp) * 100 : 0;
         const def   = TOWERS[Number(t.tower_type)];
         const alive = t.is_alive !== false;
+        const level = Number(t.level) || 1;
         const fillColor = pct > 55 ? '#5CB85C' : pct > 22 ? '#F0AD4E' : '#D9534F';
+        const upgCost   = TOWER_UPGRADE_COST[level];
+        const canUpgradeTower = alive && level < 3 && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= (upgCost ?? 9999);
         return (
           <div key={String(t.tower_id)} style={{ ...styles.card, opacity: alive ? 1 : 0.35 }}>
             <div style={styles.cardRow}>
               <span style={styles.cardName}>{def?.name}</span>
-              <span style={styles.idTag}>#{String(t.tower_id)}</span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <span style={{ ...styles.badge, background: '#4A5A8A', color: '#B8C8FF' }}>Lv{level}</span>
+                <span style={styles.idTag}>#{String(t.tower_id)}</span>
+              </div>
             </div>
             <div style={styles.hpTrack}>
               <div style={{ ...styles.hpFill, width: `${pct}%`, background: fillColor }} />
             </div>
             <div style={styles.sub}>{hp}/{maxHp} HP</div>
+            {alive && level < 3 && (
+              <button
+                style={{ ...styles.upgradeBtn, opacity: canUpgradeTower ? 1 : 0.4 }}
+                disabled={!canUpgradeTower}
+                onClick={() => onUpgradeTower(t.tower_id)}
+              >
+                ↑ UPGRADE ({upgCost}g)
+              </button>
+            )}
           </div>
         );
       })}

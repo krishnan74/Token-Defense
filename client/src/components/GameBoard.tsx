@@ -87,6 +87,18 @@ function conveyorToSvgPath(conv: Conveyor, cell: number): string {
   return `M${pts[0]} ${pts.slice(1).map((p) => `L${p}`).join(' ')}`;
 }
 
+type TowerLike = { x: number; y: number; tower_type: number; is_alive?: boolean };
+
+function hasSynergyNeighbor(tx: number, ty: number, ttype: number, allTowers: TowerLike[]): boolean {
+  return allTowers.some((other) => {
+    if (other.is_alive === false) return false;
+    if (Number(other.tower_type) === ttype) return false;
+    const dx = Math.abs(Number(other.x) - tx);
+    const dy = Math.abs(Number(other.y) - ty);
+    return dx + dy === 1;
+  });
+}
+
 function isCellOccupied(col: number, row: number, towers: unknown[], factories: unknown[]): boolean {
   if (col === BASE_X && row === BASE_Y) return true;
   return (
@@ -283,19 +295,28 @@ function EnemySprite({ enemy }: { enemy: LiveEnemy }) {
 }
 
 // ── Ghost preview ──────────────────────────────────────────────────────────
-function GhostPreview({ selectedBuild, valid }: { selectedBuild: BuildSelection; valid: boolean }) {
-  const borderColor = valid ? '#5A9E2F' : '#CC1111';
+function GhostPreview({ selectedBuild, valid, hasSynergy }: { selectedBuild: BuildSelection; valid: boolean; hasSynergy?: boolean }) {
+  const borderColor = hasSynergy && valid ? '#FFD700' : valid ? '#5A9E2F' : '#CC1111';
+  const bgColor     = hasSynergy && valid ? 'rgba(255,215,0,0.14)' : valid ? 'rgba(90,158,47,0.18)' : 'rgba(204,17,17,0.18)';
   return (
     <div style={{
       position: 'absolute', inset: 2,
       border: `3px dashed ${borderColor}`,
-      background: valid ? 'rgba(90,158,47,0.18)' : 'rgba(204,17,17,0.18)',
+      background: bgColor,
       pointerEvents: 'none', zIndex: 10,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {selectedBuild.type === 'tower'
         ? <TowerSprite towerType={selectedBuild.id} ghost />
         : <FactorySprite factoryType={selectedBuild.id} level={1} ghost />}
+      {hasSynergy && valid && (
+        <div style={{
+          position: 'absolute', top: 1, right: 3,
+          fontFamily: "'VT323', monospace", fontSize: 13, color: '#FFD700',
+          textShadow: '0 0 4px #FFD700',
+          pointerEvents: 'none',
+        }}>⚡</div>
+      )}
     </div>
   );
 }
@@ -352,6 +373,21 @@ export default function GameBoard({
   const enemies    = liveSnapshot?.enemies?.filter((e) => e.alive) ?? [];
   const liveTowers = (liveSnapshot?.towers ?? towers) as LiveTower[];
   const displayBaseHealth = liveSnapshot?.baseHealth ?? baseHealth ?? BASE_MAX_HP;
+
+  // ── Synergy computation ─────────────────────────────────────────────────
+  const towersTyped: TowerLike[] = liveTowers.map((t) => ({
+    x: Number(t.x), y: Number(t.y),
+    tower_type: Number(t.tower_type),
+    is_alive: t.is_alive,
+  }));
+  const synergyIds = new Set(
+    liveTowers
+      .filter((t) => t.is_alive !== false && hasSynergyNeighbor(Number(t.x), Number(t.y), Number(t.tower_type), towersTyped))
+      .map((t) => String(t.tower_id)),
+  );
+  const hoverSynergy = hoveredCell && selectedBuild?.type === 'tower'
+    ? hasSynergyNeighbor(hoveredCell.col, hoveredCell.row, selectedBuild.id, towersTyped)
+    : false;
 
   const hoveredOccupied = hoveredCell
     && isCellOccupied(hoveredCell.col, hoveredCell.row, liveTowers, factories);
@@ -415,7 +451,7 @@ export default function GameBoard({
                   }}
                 >
                   {isHov && selectedBuild && !isWaveActive && (
-                    <GhostPreview selectedBuild={selectedBuild} valid={canPlace} />
+                    <GhostPreview selectedBuild={selectedBuild} valid={canPlace} hasSynergy={canPlace && hoverSynergy} />
                   )}
                 </div>
               );
@@ -440,9 +476,9 @@ export default function GameBoard({
                 cx={(hoveredCell.col + 0.5) * CELL}
                 cy={(hoveredCell.row + 0.5) * CELL}
                 r={TOWER_RANGE * CELL}
-                fill="rgba(255,215,0,0.07)"
-                stroke="rgba(255,215,0,0.55)"
-                strokeWidth={2}
+                fill={hoverSynergy ? 'rgba(255,215,0,0.13)' : 'rgba(255,215,0,0.07)'}
+                stroke={hoverSynergy ? 'rgba(255,215,0,0.9)' : 'rgba(255,215,0,0.55)'}
+                strokeWidth={hoverSynergy ? 3 : 2}
                 strokeDasharray="8,5"
               />
             )}
@@ -600,6 +636,7 @@ export default function GameBoard({
                 })()
               : null;
 
+            const hasSync = synergyIds.has(String(t.tower_id));
             return (
               <div
                 key={`tw-${t.tower_id}`}
@@ -608,11 +645,21 @@ export default function GameBoard({
                   left: Number(t.x) * CELL + 5,
                   top:  Number(t.y) * CELL + 5,
                   zIndex: 3, pointerEvents: 'none',
-                  outline: tier ? `2px solid ${tier.color}` : 'none',
+                  outline: hasSync ? '2px solid #FFD700' : tier ? `2px solid ${tier.color}` : 'none',
                   outlineOffset: 2,
+                  boxShadow: hasSync ? '0 0 8px 2px rgba(255,215,0,0.35)' : 'none',
                 }}
               >
                 <TowerSprite towerType={t.tower_type} isAlive={t.is_alive} attackFlash={attackFlash} />
+                {hasSync && (
+                  <div style={{
+                    position: 'absolute', top: 0, right: 0,
+                    fontFamily: "'VT323', monospace", fontSize: 13, color: '#FFD700',
+                    textShadow: '0 0 5px #FFD700',
+                    lineHeight: 1, padding: '0 1px',
+                    pointerEvents: 'none',
+                  }}>⚡</div>
+                )}
               </div>
             );
           })}

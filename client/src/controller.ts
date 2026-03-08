@@ -16,20 +16,22 @@ const controllerOpts = {
       ...(gameContract && {
         [gameContract]: {
           name: 'Token Defense — Game',
-          description: 'Game initialisation',
+          description: 'Game initialisation and abilities',
           methods: [
-            { name: 'New Game', entrypoint: 'new_game', description: 'Initialize a new game' },
+            { name: 'New Game',           entrypoint: 'new_game',           description: 'Initialize a new game' },
+            { name: 'Activate Overclock', entrypoint: 'activate_overclock', description: 'Activate the Overclock ability' },
           ],
         },
       }),
       ...(buildingContract && {
         [buildingContract]: {
           name: 'Token Defense — Building',
-          description: 'Tower and factory placement',
+          description: 'Tower and factory placement and upgrades',
           methods: [
             { name: 'Place Tower',     entrypoint: 'place_tower',     description: 'Place a tower on the grid' },
             { name: 'Place Factory',   entrypoint: 'place_factory',   description: 'Place a factory on the grid' },
             { name: 'Upgrade Factory', entrypoint: 'upgrade_factory', description: 'Upgrade a factory level' },
+            { name: 'Upgrade Tower',   entrypoint: 'upgrade_tower',   description: 'Upgrade a tower level' },
           ],
         },
       }),

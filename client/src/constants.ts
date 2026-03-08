@@ -3,7 +3,7 @@ export const GRID_H = 8;
 
 export const BASE_X = 0;
 export const BASE_Y = 6;
-export const BASE_MAX_HP = 20;
+export const BASE_MAX_HP = 20; // Normal difficulty reference value
 
 export interface Waypoint {
   x: number;
@@ -33,6 +33,18 @@ export const TOWERS: Record<number, TowerDef> = {
   2: { name: 'Code',   hp: 90,  damage: 12, tokenType: 2, tokenCost: 2 },
 };
 
+export const TOWER_UPGRADE_COST: Record<number, number> = {
+  1: 80,   // level 1 → 2
+  2: 120,  // level 2 → 3
+};
+
+/** Damage multiplier per tower level (mirrors contract tower_damage_multiplier_x100). */
+export function getTowerLevelMultiplier(level: number): number {
+  if (level >= 3) return 1.65;
+  if (level >= 2) return 1.30;
+  return 1.00;
+}
+
 export interface FactoryDef {
   name: string;
   cost: number;
@@ -47,6 +59,12 @@ export const FACTORIES: Record<number, FactoryDef> = {
 };
 
 export const TOKEN_NAMES: string[] = ['input_tokens', 'image_tokens', 'code_tokens'];
+
+/** Token balance cap — excess production is discarded on-chain. */
+export const MAX_TOKEN_BALANCE = 150;
+
+/** Gold cost to activate Overclock for one wave. */
+export const OVERCLOCK_COST = 50;
 
 export interface TokenTier {
   minRatio: number;
@@ -80,9 +98,10 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<string, EnemyDef> = {
-  TextJailbreak:   { hp: 20, speed: 1.5, gold: 2, damage: 1 },
-  ContextOverflow: { hp: 35, speed: 0.9, gold: 4, damage: 3 },
-  HalluSwarm:      { hp: 5,  speed: 3.0, gold: 1, damage: 1 },
+  TextJailbreak:   { hp: 20,  speed: 1.5, gold: 2,  damage: 1 },
+  ContextOverflow: { hp: 35,  speed: 0.9, gold: 4,  damage: 3 },
+  HalluSwarm:      { hp: 5,   speed: 3.0, gold: 1,  damage: 1 },
+  Boss:            { hp: 120, speed: 0.5, gold: 15, damage: 5 },
 };
 
 export interface WaveGroup {
@@ -95,18 +114,64 @@ export const WAVE_COMPOSITIONS: Record<number, WaveGroup[]> = {
   2:  [{ type: 'TextJailbreak', count: 7 }],
   3:  [{ type: 'TextJailbreak', count: 8 }],
   4:  [{ type: 'TextJailbreak', count: 6 }, { type: 'ContextOverflow', count: 2 }],
-  5:  [{ type: 'TextJailbreak', count: 7 }, { type: 'ContextOverflow', count: 3 }],
+  5:  [{ type: 'TextJailbreak', count: 7 }, { type: 'ContextOverflow', count: 3 }, { type: 'Boss', count: 1 }],
   6:  [{ type: 'TextJailbreak', count: 8 }, { type: 'ContextOverflow', count: 4 }],
   7:  [{ type: 'TextJailbreak', count: 6 }, { type: 'ContextOverflow', count: 3 }, { type: 'HalluSwarm', count: 9 }],
   8:  [{ type: 'TextJailbreak', count: 7 }, { type: 'ContextOverflow', count: 3 }, { type: 'HalluSwarm', count: 12 }],
   9:  [{ type: 'TextJailbreak', count: 8 }, { type: 'ContextOverflow', count: 4 }, { type: 'HalluSwarm', count: 15 }],
-  10: [{ type: 'TextJailbreak', count: 10 }, { type: 'ContextOverflow', count: 5 }, { type: 'HalluSwarm', count: 15 }],
+  10: [{ type: 'TextJailbreak', count: 10 }, { type: 'ContextOverflow', count: 5 }, { type: 'HalluSwarm', count: 15 }, { type: 'Boss', count: 1 }],
 };
 
 export const GOLD_PER_WAVE = (wave: number): number => 50 + wave * 10;
 
 export const TOWER_RANGE = 3;
 export const TICKS_PER_SEC = 60;
+
+// ── Wave modifiers ─────────────────────────────────────────────────────────
+// Mirrors contract wave_modifier(wave) — MUST stay in sync.
+// 0=None, 1=Fast(speed×1.5), 2=Armored(HP×1.5)
+const WAVE_MODIFIER_TABLE: Record<number, number> = { 2: 1, 4: 2, 6: 1, 8: 2, 10: 1 };
+
+export function getWaveModifier(wave: number): number {
+  return WAVE_MODIFIER_TABLE[wave] ?? 0;
+}
+
+export const WAVE_MODIFIER_INFO: Record<number, { label: string; color: string }> = {
+  0: { label: '',                                    color: '' },
+  1: { label: '⚡ FAST WAVE — enemies move 50% faster', color: '#FFD700' },
+  2: { label: '🛡 ARMORED WAVE — enemies have 50% more HP', color: '#63B3ED' },
+};
+
+// ── Enemy traits ──────────────────────────────────────────────────────────
+// Mirrors contract get_enemy_trait(wave, group, index) — MUST stay in sync.
+// 0=None, 1=Armored(HP×1.5), 2=Fast(speed×1.5)
+// group: 0=TJ, 1=CO, 2=HS, 3=Boss
+export function getEnemyTrait(wave: number, group: number, index: number): number {
+  if (wave < 5) return 0;
+  if (group === 0 && index % 3 === 2) return 1; // TJ Armored
+  if (group === 2 && wave >= 7 && index % 4 === 0) return 2; // HS Fast
+  return 0;
+}
+
+// ── Difficulty settings ───────────────────────────────────────────────────
+export interface DifficultySetting {
+  label: string;
+  gold: number;
+  baseHp: number;
+  initTokens: [number, number, number];
+  color: string;
+  darkColor: string;
+}
+
+export const DIFFICULTY_SETTINGS: DifficultySetting[] = [
+  { label: 'EASY',   gold: 300, baseHp: 30, initTokens: [80, 25, 30], color: '#4A7A20', darkColor: '#2E5010' },
+  { label: 'NORMAL', gold: 200, baseHp: 20, initTokens: [50, 15, 20], color: '#4A5A8A', darkColor: '#2C3860' },
+  { label: 'HARD',   gold: 120, baseHp: 10, initTokens: [30,  8, 12], color: '#8A2A2A', darkColor: '#5A1010' },
+];
+
+export function getDifficultyBaseHp(difficulty: number): number {
+  return DIFFICULTY_SETTINGS[difficulty]?.baseHp ?? BASE_MAX_HP;
+}
 
 // ── Path tiles ─────────────────────────────────────────────────────────────
 /** Returns true if the cell is part of the enemy walk path (cannot build here). */

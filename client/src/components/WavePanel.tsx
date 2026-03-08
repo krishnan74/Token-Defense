@@ -1,28 +1,35 @@
-import { ENEMIES, WAVE_COMPOSITIONS } from '../constants';
+import { ENEMIES, OVERCLOCK_COST, WAVE_COMPOSITIONS, WAVE_MODIFIER_INFO, getWaveModifier } from '../constants';
 
 interface WavePanelProps {
-  gameState: { wave_number: number; is_wave_active?: boolean } | null;
+  gameState: { wave_number: number; is_wave_active?: boolean; overclock_used?: boolean } | null;
   isWaveActive: boolean;
   isCountingDown: boolean;
+  overclockAvailable: boolean;
   onStartWave: () => void;
+  onOverclock: () => void;
 }
 
 const ENEMY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   TextJailbreak:   { bg: '#CC1111', border: '#660000', text: '#FFB8B8' },
   ContextOverflow: { bg: '#8B4513', border: '#4A1A00', text: '#FFD4A8' },
   HalluSwarm:      { bg: '#8800CC', border: '#440066', text: '#E8B8FF' },
+  Boss:            { bg: '#1A1A2E', border: '#7B00FF', text: '#D4B8FF' },
 };
 
 const ENEMY_SHORT: Record<string, string> = {
-  TextJailbreak: 'TJ', ContextOverflow: 'CO', HalluSwarm: 'HS',
+  TextJailbreak: 'TJ', ContextOverflow: 'CO', HalluSwarm: 'HS', Boss: 'BOSS',
 };
 
-export default function WavePanel({ gameState, isWaveActive, isCountingDown, onStartWave }: WavePanelProps) {
+export default function WavePanel({
+  gameState, isWaveActive, isCountingDown, overclockAvailable, onStartWave, onOverclock,
+}: WavePanelProps) {
   if (!gameState) return null;
   const { wave_number, is_wave_active } = gameState;
-  const busy    = is_wave_active || isWaveActive || isCountingDown;
+  const busy     = is_wave_active || isWaveActive || isCountingDown;
   const nextWave = wave_number + 1;
   const composition = WAVE_COMPOSITIONS[nextWave] ?? [];
+  const modifier    = getWaveModifier(nextWave);
+  const modInfo     = WAVE_MODIFIER_INFO[modifier];
 
   return (
     <div style={styles.panel}>
@@ -40,8 +47,15 @@ export default function WavePanel({ gameState, isWaveActive, isCountingDown, onS
         )}
       </div>
 
+      {/* Wave modifier banner */}
+      {modifier > 0 && !busy && (
+        <div style={{ ...styles.modifierBadge, color: modInfo.color, borderColor: modInfo.color }}>
+          {modInfo.label}
+        </div>
+      )}
+
       {/* Wave preview — show next wave composition */}
-      {composition.length > 0 && !busy && (
+      {composition.length > 0 && !busy && modifier === 0 && (
         <div style={styles.preview}>
           <span style={styles.previewLabel}>NEXT:</span>
           {composition.map((group) => {
@@ -61,6 +75,18 @@ export default function WavePanel({ gameState, isWaveActive, isCountingDown, onS
         </div>
       )}
 
+      {/* Overclock button */}
+      {!busy && nextWave <= 10 && (
+        <button
+          style={{ ...styles.overclockBtn, ...(overclockAvailable ? {} : styles.overclockUsed) }}
+          disabled={!overclockAvailable}
+          onClick={onOverclock}
+          title={`Doubles all tower fire rates for this wave (costs ${OVERCLOCK_COST}g)`}
+        >
+          {overclockAvailable ? `⚡ OVERCLOCK (${OVERCLOCK_COST}g)` : '⚡ USED'}
+        </button>
+      )}
+
       {/* Start button */}
       <button
         style={{ ...styles.btn, ...(busy ? styles.btnBusy : {}) }}
@@ -75,7 +101,7 @@ export default function WavePanel({ gameState, isWaveActive, isCountingDown, onS
 
 const styles = {
   panel: {
-    display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const,
+    display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const,
     padding: '6px 14px',
     background: '#2C1507',
     borderBottom: '3px solid #4A2510',
@@ -94,6 +120,11 @@ const styles = {
     border: '1px solid #2E5010',
     boxShadow: '1px 1px 0 #1A2E08',
   },
+  modifierBadge: {
+    fontFamily: "'VT323', monospace", fontSize: 13,
+    border: '1px solid', padding: '1px 8px',
+    letterSpacing: 0.5,
+  },
   preview: { display: 'flex', alignItems: 'center', gap: 6, flex: 1 },
   previewLabel: {
     fontFamily: "'VT323', monospace", fontSize: 14, color: '#A08060', letterSpacing: 1,
@@ -103,6 +134,22 @@ const styles = {
     padding: '1px 7px',
     borderRadius: 0,
     boxShadow: '2px 2px 0 rgba(0,0,0,0.4)',
+  },
+  overclockBtn: {
+    padding: '4px 12px',
+    background: '#3A2A6A',
+    color: '#C8B8FF',
+    border: '2px solid #5A3A9A',
+    borderRadius: 0,
+    cursor: 'pointer',
+    fontFamily: "'VT323', monospace", fontSize: 14,
+    boxShadow: '2px 2px 0 #1A0A3A',
+    letterSpacing: 0.5,
+    transition: 'background 0.1s',
+  },
+  overclockUsed: {
+    background: '#2A1A3A', color: '#604880', border: '2px solid #3A2A5A',
+    cursor: 'default', boxShadow: 'none',
   },
   btn: {
     marginLeft: 'auto' as const,

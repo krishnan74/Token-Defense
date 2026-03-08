@@ -1,3 +1,5 @@
+import { MAX_TOKEN_BALANCE } from '../constants';
+
 interface GameStateDisplay {
   gold: number;
   input_tokens?: number;
@@ -5,6 +7,22 @@ interface GameStateDisplay {
   code_tokens?: number;
   wave_number: number;
   base_health?: number;
+}
+
+function TokenDisplay({
+  icon, label, value, color,
+}: { icon: string; label: string; value: number; color: string }) {
+  const pct = value / MAX_TOKEN_BALANCE;
+  const nearCap = pct >= 0.85;
+  const displayColor = nearCap ? '#FFD700' : color;
+  return (
+    <div style={styles.resource}>
+      <span style={styles.icon}>{icon}</span>
+      <span style={styles.label}>{label}</span>
+      <span style={{ ...styles.value, color: displayColor }}>{value}</span>
+      <span style={{ ...styles.cap, color: nearCap ? '#FFD700' : '#4A2510' }}>/{MAX_TOKEN_BALANCE}</span>
+    </div>
+  );
 }
 
 export default function ResourceBar({ gameState }: { gameState: GameStateDisplay | null }) {
@@ -22,22 +40,10 @@ export default function ResourceBar({ gameState }: { gameState: GameStateDisplay
 
       <div style={styles.divider} />
 
-      {/* Tokens */}
-      <div style={styles.resource}>
-        <span style={styles.icon}>▲</span>
-        <span style={styles.label}>INPUT</span>
-        <span style={{ ...styles.value, color: '#63B3ED' }}>{input_tokens ?? 0}</span>
-      </div>
-      <div style={styles.resource}>
-        <span style={styles.icon}>■</span>
-        <span style={styles.label}>IMAGE</span>
-        <span style={{ ...styles.value, color: '#68D391' }}>{image_tokens ?? 0}</span>
-      </div>
-      <div style={styles.resource}>
-        <span style={styles.icon}>●</span>
-        <span style={styles.label}>CODE</span>
-        <span style={{ ...styles.value, color: '#FC8181' }}>{code_tokens ?? 0}</span>
-      </div>
+      {/* Tokens with cap indicator */}
+      <TokenDisplay icon="▲" label="INPUT" value={input_tokens ?? 0} color="#63B3ED" />
+      <TokenDisplay icon="■" label="IMAGE" value={image_tokens ?? 0} color="#68D391" />
+      <TokenDisplay icon="●" label="CODE"  value={code_tokens  ?? 0} color="#FC8181" />
     </div>
   );
 }
@@ -63,6 +69,9 @@ const styles = {
   value: {
     fontFamily: "'VT323', monospace", fontSize: 20, fontWeight: 'normal',
     textShadow: '1px 1px 0 rgba(0,0,0,0.5)',
+  },
+  cap: {
+    fontFamily: "'VT323', monospace", fontSize: 13,
   },
   divider: { width: 2, height: 24, background: '#4A2510', margin: '0 6px' },
 };

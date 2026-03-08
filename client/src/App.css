@@ -628,6 +628,39 @@
   color: #A08060;
 }
 
+/* ── Difficulty selector ── */
+.menu-difficulty-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu-difficulty-label {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: '#6B3A1E';
+  letter-spacing: 3px;
+}
+
+.menu-difficulty-row {
+  display: flex;
+  gap: 12px;
+}
+
+.menu-difficulty-btn {
+  padding: 10px 22px;
+  border: 3px solid;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.1s, box-shadow 0.1s;
+  min-width: 90px;
+}
+
+.menu-difficulty-btn:hover {
+  filter: brightness(1.2);
+}
+
 /* ── CTA ── */
 .menu-cta-block {
   text-align: center;

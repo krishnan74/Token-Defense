@@ -12,6 +12,8 @@ export interface GameState {
   image_tokens: number;
   code_tokens: number;
   base_health: number;
+  difficulty: number;      // 0=Easy, 1=Normal, 2=Hard
+  overclock_used: boolean; // active ability flag
 }
 
 export interface Tower {
@@ -23,6 +25,7 @@ export interface Tower {
   health: number;
   max_health: number;
   is_alive: boolean;
+  level: number;     // 1-3
 }
 
 export interface Factory {
@@ -39,7 +42,7 @@ export interface Factory {
 export interface WaveResolvedEvent {
   wave_number: number;
   /** Bitmask: bit i = 1 if the i-th spawned enemy was killed.
-   *  Spawn order: TJ group first, then CO, then HS (matching WAVE_COMPOSITIONS). */
+   *  Spawn order: TJ group first, then CO, then HS, then Boss (matching WAVE_COMPOSITIONS). */
   enemy_outcomes: number;
   kill_gold: number;
   base_damage: number;

@@ -8,9 +8,9 @@ import TowerStatus from './components/TowerStatus';
 import WavePanel from './components/WavePanel';
 import {
   BASE_MAX_HP, BASE_X, BASE_Y,
-  CONVEYOR_COLORS, ENEMIES, FACTORIES, GOLD_PER_WAVE,
-  TOWERS, WAVE_COMPOSITIONS,
-  computeConveyorTiles, isPathTile,
+  CONVEYOR_COLORS, DIFFICULTY_SETTINGS, FACTORIES,
+  OVERCLOCK_COST, TOWERS, TOWER_UPGRADE_COST, WAVE_COMPOSITIONS,
+  computeConveyorTiles, getDifficultyBaseHp, isPathTile,
 } from './constants';
 import type { ConveyorTile } from './constants';
 import type { ManifestContract } from './dojo/models';
@@ -43,9 +43,11 @@ interface WaveResultSummary {
   goldEarned: number;
   baseDamage: number;
   baseHealthRemaining: number;
+  baseMaxHp: number;
   killedTJ: boolean;
   killedCO: boolean;
   killedHS: boolean;
+  killedBoss: boolean;
   killCount: number;
 }
 
@@ -83,6 +85,7 @@ interface PendingReplay {
   killedTJ: boolean;
   killedCO: boolean;
   killedHS: boolean;
+  killedBoss: boolean;
   baseDamageTaken: number;
   resultSummary: WaveResultSummary;
 }
@@ -108,6 +111,8 @@ export default function App({ account, manifest }: AppProps) {
   const replaySpeedRef = useRef(1);
   const [isStartingGame, setIsStartingGame] = useState(false);
   const [conveyors, setConveyors] = useState<Conveyor[]>([]);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<number>(1); // 0=Easy,1=Normal,2=Hard
+  const [overclockPending, setOverclockPending] = useState(false);
 
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -289,7 +294,7 @@ export default function App({ account, manifest }: AppProps) {
       // Decode per-type kill booleans from bitmask for result card display.
       const composition = WAVE_COMPOSITIONS[completedWave] ?? [];
       let bit = 0;
-      let killedTJ = true, killedCO = true, killedHS = true;
+      let killedTJ = true, killedCO = true, killedHS = true, killedBoss = true;
       let killCount = 0;
       for (const g of composition) {
         for (let i = 0; i < g.count; i++) {
@@ -299,6 +304,7 @@ export default function App({ account, manifest }: AppProps) {
             if (g.type === 'TextJailbreak')   killedTJ = false;
             if (g.type === 'ContextOverflow') killedCO = false;
             if (g.type === 'HalluSwarm')      killedHS = false;
+            if (g.type === 'Boss')            killedBoss = false;
           }
           bit++;
         }
@@ -306,19 +312,21 @@ export default function App({ account, manifest }: AppProps) {
       if (!composition.some((g) => g.type === 'TextJailbreak'))   killedTJ = true;
       if (!composition.some((g) => g.type === 'ContextOverflow')) killedCO = true;
       if (!composition.some((g) => g.type === 'HalluSwarm'))      killedHS = true;
+      if (!composition.some((g) => g.type === 'Boss'))            killedBoss = true;
 
       const baseHealthRemaining = clientBaseHealthRef.current;
+      const baseMaxHp = getDifficultyBaseHp(pre.difficulty ?? 1);
 
       pendingReplayRef.current = {
         towers: allTowers,
         factories: allFactories,
         preState: { ...pre } as NonNullable<typeof gameState>,
         waveNumber: completedWave,
-        killedTJ, killedCO, killedHS,
+        killedTJ, killedCO, killedHS, killedBoss,
         baseDamageTaken,
         resultSummary: {
           waveNumber: completedWave, goldEarned, baseDamage: baseDamageTaken,
-          baseHealthRemaining, killedTJ, killedCO, killedHS, killCount,
+          baseHealthRemaining, baseMaxHp, killedTJ, killedCO, killedHS, killedBoss, killCount,
         },
       };
 
@@ -374,6 +382,11 @@ export default function App({ account, manifest }: AppProps) {
     if (gameState && isStartingGame) setIsStartingGame(false);
   }, [gameState, isStartingGame]);
 
+  // Sync overclockPending: once chain confirms overclock_used=true, clear pending flag
+  useEffect(() => {
+    if (gameState?.overclock_used && overclockPending) setOverclockPending(false);
+  }, [gameState?.overclock_used, overclockPending]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -394,7 +407,7 @@ export default function App({ account, manifest }: AppProps) {
     return { ...typed, level: Number(typed.level) + (upgradeOptimistic.counts[String(typed.factory_id)] ?? 0) };
   });
 
-  const displayGold = (gameState?.gold ?? 0) - optimisticGoldSpent - upgradeOptimistic.gold;
+  const displayGold = (gameState?.gold ?? 0) - optimisticGoldSpent - upgradeOptimistic.gold - (overclockPending ? OVERCLOCK_COST : 0);
 
   // Base health display:
   // - During waiting/countdown: show pre-wave value (chain already has new value, but replay hasn't played yet)
@@ -457,7 +470,8 @@ export default function App({ account, manifest }: AppProps) {
             if (
               (!has('TextJailbreak')   || result.killedTJ) &&
               (!has('ContextOverflow') || result.killedCO) &&
-              (!has('HalluSwarm')      || result.killedHS)
+              (!has('HalluSwarm')      || result.killedHS) &&
+              (!has('Boss')            || result.killedBoss)
             ) unlock('clean_sweep');
 
             // Cumulative stats
@@ -540,6 +554,29 @@ export default function App({ account, manifest }: AppProps) {
     });
   }
 
+  function handleUpgradeTower(id: number | string) {
+    sfx.playClick();
+    const tower = (allTowers as Array<{ tower_id: string | number; level: number }>)
+      .find((t) => String(t.tower_id) === String(id));
+    const level = Number(tower?.level) || 1;
+    const cost = TOWER_UPGRADE_COST[level] ?? 9999;
+    setOptimisticGoldSpent((prev) => prev + cost);
+    actions.upgradeTower(id as number).catch((e: unknown) => {
+      console.error('upgradeTower failed:', e);
+      setOptimisticGoldSpent((prev) => Math.max(0, prev - cost));
+    });
+  }
+
+  function handleActivateOverclock() {
+    if (overclockPending || gameState?.overclock_used) return;
+    sfx.playClick();
+    setOverclockPending(true);
+    actions.activateOverclock().catch((e: unknown) => {
+      console.error('activateOverclock failed:', e);
+      setOverclockPending(false);
+    });
+  }
+
   async function handleCellClick(col: number, row: number) {
     if (!selectedBuild || !gameState || isWaitingWaveActive || countdown !== null || isReplaying) return;
     if (col === BASE_X && row === BASE_Y) return;
@@ -618,14 +655,17 @@ export default function App({ account, manifest }: AppProps) {
     return (
       <MenuScreen
         mode="new-game"
+        selectedDifficulty={selectedDifficulty}
+        onSelectDifficulty={setSelectedDifficulty}
         onAction={() => {
           sfx.playClick();
           setIsStartingGame(true);
           setConveyors([]);
           clientBaseHealthInitRef.current = false;
-          clientBaseHealthRef.current = BASE_MAX_HP;
-          setClientBaseHealthDisplay(BASE_MAX_HP);
-          actions.newGame().catch((e) => {
+          const startHp = getDifficultyBaseHp(selectedDifficulty);
+          clientBaseHealthRef.current = startHp;
+          setClientBaseHealthDisplay(startHp);
+          actions.newGame(selectedDifficulty).catch((e) => {
             console.error(e);
             setIsStartingGame(false);
           });
@@ -651,7 +691,9 @@ export default function App({ account, manifest }: AppProps) {
         gameState={displayGameState}
         isWaveActive={isBusy}
         isCountingDown={isCountingDown}
+        overclockAvailable={!gameState.overclock_used && !overclockPending && !isBusy && (displayGameState?.gold ?? 0) >= OVERCLOCK_COST}
         onStartWave={handleStartWave}
+        onOverclock={handleActivateOverclock}
       />
       <div className="app-layout">
         <GameBoard
@@ -669,6 +711,7 @@ export default function App({ account, manifest }: AppProps) {
           factories={allFactories}
           gameState={displayGameState}
           onUpgrade={handleUpgrade}
+          onUpgradeTower={handleUpgradeTower}
         />
       </div>
       <BuildMenu selected={selectedBuild} onSelect={(s) => { sfx.playClick(); setSelectedBuild(s); }} gameState={displayGameState} />
@@ -716,8 +759,8 @@ export default function App({ account, manifest }: AppProps) {
               </div>
             )}
             <div className="app-result-row">
-              Base HP: <b style={{ color: waveResult.baseHealthRemaining > 10 ? '#5CB85C' : '#D9534F' }}>
-                {waveResult.baseHealthRemaining}/{BASE_MAX_HP}
+              Base HP: <b style={{ color: waveResult.baseHealthRemaining > 0 ? '#5CB85C' : '#D9534F' }}>
+                {waveResult.baseHealthRemaining}/{waveResult.baseMaxHp}
               </b>
             </div>
             <KillBreakdown result={waveResult} />
@@ -740,7 +783,7 @@ export default function App({ account, manifest }: AppProps) {
             </div>
             <div className="app-gameover-sub">
               {gameOver.victory
-                ? `All 10 waves cleared! Base: ${gameOver.baseHealthRemaining}/${BASE_MAX_HP} HP`
+                ? `All 10 waves cleared! Base: ${gameOver.baseHealthRemaining}/${getDifficultyBaseHp(gameState?.difficulty ?? selectedDifficulty)} HP`
                 : `Base fell on wave ${gameOver.waveNumber}.`}
             </div>
             <div className="app-gameover-stats">
@@ -753,10 +796,13 @@ export default function App({ account, manifest }: AppProps) {
                 setGameOver(null);
                 setGameStats(EMPTY_STATS);
                 setConveyors([]);
+                setOverclockPending(false);
                 clientBaseHealthInitRef.current = false;
-                clientBaseHealthRef.current = BASE_MAX_HP;
-                setClientBaseHealthDisplay(BASE_MAX_HP);
-                actions.newGame().catch(console.error);
+                const diff = gameState?.difficulty ?? selectedDifficulty;
+                const startHp = getDifficultyBaseHp(diff);
+                clientBaseHealthRef.current = startHp;
+                setClientBaseHealthDisplay(startHp);
+                actions.newGame(diff).catch(console.error);
               }}
             >
               PLAY AGAIN
@@ -812,7 +858,14 @@ const MENU_ENEMIES = [
   { label: '~',   name: 'HalluSwarm',      color: '#8800CC', dark: '#440066', text: '#E8B8FF', sz: 26, round: true,  desc: 'Swarm · 1g · 1 dmg' },
 ];
 
-function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction: (() => void) | undefined }) {
+function MenuScreen({
+  mode, selectedDifficulty, onSelectDifficulty, onAction,
+}: {
+  mode: 'connect' | 'new-game';
+  selectedDifficulty?: number;
+  onSelectDifficulty?: (d: number) => void;
+  onAction: (() => void) | undefined;
+}) {
   return (
     <div className="menu-root">
       <div className="menu-grass" />
@@ -880,9 +933,32 @@ function MenuScreen({ mode, onAction }: { mode: 'connect' | 'new-game'; onAction
             <div className="menu-cta-hint">Connect your Cartridge Controller to play</div>
           </div>
         ) : (
-          <button className="menu-play-btn" onClick={onAction}>
-            ▶  START GAME
-          </button>
+          <div className="menu-difficulty-block">
+            <div className="menu-difficulty-label">SELECT DIFFICULTY</div>
+            <div className="menu-difficulty-row">
+              {DIFFICULTY_SETTINGS.map((d, i) => (
+                <button
+                  key={i}
+                  className="menu-difficulty-btn"
+                  style={{
+                    background: selectedDifficulty === i ? d.color : '#2C1507',
+                    borderColor: selectedDifficulty === i ? d.color : '#4A2510',
+                    color: selectedDifficulty === i ? '#F5E6C8' : '#A08060',
+                    boxShadow: selectedDifficulty === i ? `0 0 8px ${d.color}80` : 'none',
+                  }}
+                  onClick={() => onSelectDifficulty?.(i)}
+                >
+                  <div style={{ fontFamily: "'VT323', monospace", fontSize: 18, letterSpacing: 1 }}>{d.label}</div>
+                  <div style={{ fontFamily: "'VT323', monospace", fontSize: 12, opacity: 0.8 }}>
+                    {d.gold}g · {d.baseHp}HP
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button className="menu-play-btn" onClick={onAction} style={{ marginTop: 16 }}>
+              ▶  START GAME
+            </button>
+          </div>
         )}
       </div>
 
@@ -904,6 +980,8 @@ function KillBreakdown({ result }: { result: WaveResultSummary }) {
     rows.push({ label: 'ContextOverflow', killed: result.killedCO });
   if (composition.some((g) => g.type === 'HalluSwarm'))
     rows.push({ label: 'HalluSwarm',      killed: result.killedHS });
+  if (composition.some((g) => g.type === 'Boss'))
+    rows.push({ label: 'BOSS',            killed: result.killedBoss });
   if (!rows.length) return null;
   return (
     <div className="app-kill-breakdown">

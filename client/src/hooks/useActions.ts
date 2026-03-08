@@ -28,7 +28,9 @@ export function useActions(
   }
 
   return {
-    newGame: () => call(addresses.game, 'new_game'),
+    newGame: (difficulty: number) => call(addresses.game, 'new_game', [difficulty]),
+
+    activateOverclock: () => call(addresses.game, 'activate_overclock'),
 
     placeTower: (towerType: number, x: number, y: number) =>
       call(addresses.building, 'place_tower', [towerType, x, y]),
@@ -38,6 +40,9 @@ export function useActions(
 
     upgradeFactory: (factoryId: number | string) =>
       call(addresses.building, 'upgrade_factory', [factoryId as number]),
+
+    upgradeTower: (towerId: number | string) =>
+      call(addresses.building, 'upgrade_tower', [towerId as number]),
 
     startWave: () => call(addresses.wave, 'start_wave'),
   };
