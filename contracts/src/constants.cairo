@@ -21,7 +21,14 @@ pub const INPUT_TOKENS_BASE: u32 = 30;
 pub const IMAGE_TOKENS_BASE: u32 = 10;
 pub const CODE_TOKENS_BASE: u32 = 12;
 
-// ── Initial values ────────────────────────────────────────────────────────────
+// ── Token overflow cap ────────────────────────────────────────────────────────
+// Tokens cannot exceed this balance — excess production is discarded.
+pub const MAX_TOKEN_BALANCE: u32 = 150;
+
+// ── Overclock cost ────────────────────────────────────────────────────────────
+pub const OVERCLOCK_COST: u32 = 50;
+
+// ── Initial values (Normal difficulty) ───────────────────────────────────────
 pub const INIT_GOLD: u32 = 200;
 pub const INIT_INPUT_TOKENS: u32 = 50;
 pub const INIT_IMAGE_TOKENS: u32 = 15;
@@ -34,7 +41,7 @@ pub const WAVE_GOLD_BASE: u32 = 50;
 pub const WAVE_GOLD_PER_WAVE: u32 = 10;
 
 // ── Enemy constants ───────────────────────────────────────────────────────────
-// Types: 0=TextJailbreak, 1=ContextOverflow, 2=HalluSwarm
+// Types: 0=TextJailbreak, 1=ContextOverflow, 2=HalluSwarm, 3=Boss
 pub const TJ_HP: u32 = 20;
 pub const TJ_SPEED_X100: u32 = 150; // 1.5 tiles/s × 100
 pub const TJ_GOLD: u32 = 2;
@@ -50,39 +57,126 @@ pub const HS_SPEED_X100: u32 = 300; // 3.0 tiles/s × 100
 pub const HS_GOLD: u32 = 1;
 pub const HS_BASE_DAMAGE: u32 = 1;
 
-// ── Wave enemy counts (tj_count, co_count, hs_count) ─────────────────────────
-pub fn wave_enemy_counts(wave: u32) -> (u32, u32, u32) {
-    match wave {
-        1  => (6,  0,  0),
-        2  => (7,  0,  0),
-        3  => (8,  0,  0),
-        4  => (6,  2,  0),
-        5  => (7,  3,  0),
-        6  => (8,  4,  0),
-        7  => (6,  3,  9),
-        8  => (7,  3, 12),
-        9  => (8,  4, 15),
-        10 => (10, 5, 15),
-        _  => (10, 5, 15),
+// Boss — appears on waves 5 and 10
+pub const BOSS_HP: u32 = 120;
+pub const BOSS_SPEED_X100: u32 = 50;  // 0.5 tiles/s × 100
+pub const BOSS_GOLD: u32 = 15;
+pub const BOSS_BASE_DAMAGE: u32 = 5;
+
+// ── Tower upgrade costs ───────────────────────────────────────────────────────
+// Returns gold cost to upgrade a tower from current_level to current_level + 1.
+pub fn tower_upgrade_cost(current_level: u32) -> u32 {
+    match current_level {
+        1 => 80,   // level 1 → 2
+        2 => 120,  // level 2 → 3
+        _ => 9999, // already at max (level 3)
     }
 }
 
-// ── Wave composition bounds (kept for reference; no longer used for validation) ─
-// Enemy gold values:  TJ=2, CO=4, HS=1
-// Enemy base damage:  TJ=1, CO=3, HS=1
+// Tower damage multiplier × 100 per level (100 = 1.0×, 130 = 1.3×, etc.)
+pub fn tower_damage_multiplier_x100(level: u32) -> u32 {
+    match level {
+        1 => 100,
+        2 => 130,
+        3 => 165,
+        _ => 100,
+    }
+}
+
+// ── Wave enemy counts (tj, co, hs, boss) ─────────────────────────────────────
+// Boss appears on waves 5 and 10.
+pub fn wave_enemy_counts(wave: u32) -> (u32, u32, u32, u32) {
+    match wave {
+        1  => (6,  0,  0,  0),
+        2  => (7,  0,  0,  0),
+        3  => (8,  0,  0,  0),
+        4  => (6,  2,  0,  0),
+        5  => (7,  3,  0,  1),
+        6  => (8,  4,  0,  0),
+        7  => (6,  3,  9,  0),
+        8  => (7,  3, 12,  0),
+        9  => (8,  4, 15,  0),
+        10 => (10, 5, 15,  1),
+        _  => (10, 5, 15,  0),
+    }
+}
+
+// ── Wave modifier ─────────────────────────────────────────────────────────────
+// 0=None, 1=Fast(speed×1.5), 2=Armored(HP×1.5)
+// Modifier applies to ALL enemy types in the wave.
+pub fn wave_modifier(wave: u32) -> u32 {
+    match wave {
+        2  => 1, // Fast
+        4  => 2, // Armored
+        6  => 1, // Fast
+        8  => 2, // Armored
+        10 => 1, // Fast (boss wave)
+        _  => 0, // None
+    }
+}
+
+// ── Enemy traits ──────────────────────────────────────────────────────────────
+// 0=None, 1=Armored(HP×1.5), 2=Fast(speed×1.5)
+// group: 0=TJ, 1=CO, 2=HS, 3=Boss
+// Traits appear from wave 5 onward.
+pub fn get_enemy_trait(wave: u32, group: u32, index: u32) -> u32 {
+    if wave < 5 { return 0; }
+    // TJ group: every 3rd enemy (indices 2, 5, 8, ...) is Armored
+    if group == 0 && index % 3 == 2 { return 1; }
+    // HS group: every 4th enemy (indices 0, 4, 8, ...) is Fast, from wave 7
+    if group == 2 && wave >= 7 && index % 4 == 0 { return 2; }
+    0
+}
+
+// ── Difficulty settings ───────────────────────────────────────────────────────
+// 0=Easy, 1=Normal, 2=Hard
+
+pub fn difficulty_init_gold(d: u32) -> u32 {
+    match d {
+        0 => 300, // Easy
+        1 => 200, // Normal (= INIT_GOLD)
+        2 => 120, // Hard
+        _ => 200,
+    }
+}
+
+pub fn difficulty_base_hp(d: u32) -> u32 {
+    match d {
+        0 => 30,  // Easy
+        1 => 20,  // Normal (= BASE_MAX_HP)
+        2 => 10,  // Hard
+        _ => 20,
+    }
+}
+
+// Returns (input_tokens, image_tokens, code_tokens) initial balances.
+pub fn difficulty_init_tokens(d: u32) -> (u32, u32, u32) {
+    match d {
+        0 => (80, 25, 30), // Easy
+        1 => (50, 15, 20), // Normal (= INIT_* constants)
+        2 => (30, 8,  12), // Hard
+        _ => (50, 15, 20),
+    }
+}
+
+// ── Wave composition bounds (reference only; not used for validation) ─────────
 pub fn wave_max_kill_gold(wave: u32) -> u32 {
     match wave {
-        1 => 12, 2 => 14, 3 => 16, 4 => 20, 5 => 26,
-        6 => 32, 7 => 33, 8 => 38, 9 => 47, 10 => 55,
-        _ => 55,
+        1  => 12,  2  => 14,  3  => 16,  4  => 20,
+        5  => 41,  // 7×2 + 3×4 + 1×15
+        6  => 32,  7  => 33,  8  => 38,  9  => 47,
+        10 => 70,  // 10×2 + 5×4 + 15×1 + 1×15
+        _  => 70,
     }
 }
 
 pub fn wave_max_base_damage(wave: u32) -> u32 {
     match wave {
-        1 => 6,  2 => 7,  3 => 8,  4 => 12, 5 => 16,
-        6 => 20, 7 => 24, 8 => 28, 9 => 35, 10 => 40,
-        _ => 40,
+        1  => 6,   2  => 7,   3  => 8,   4  => 12,
+        5  => 21,  // 7×1 + 3×3 + 1×5
+        6  => 20,  7  => 24,  8  => 28,  9  => 35,
+        10 => 45,  // 10×1 + 5×3 + 15×1 + 1×5
+        _  => 45,
     }
 }
 

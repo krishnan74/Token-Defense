@@ -16,6 +16,8 @@ pub struct GameState {
     pub image_tokens: u32,
     pub code_tokens: u32,
     pub base_health: u32,
+    pub difficulty: u32,       // 0=Easy, 1=Normal, 2=Hard
+    pub overclock_used: bool,  // active ability: halves all tower cooldowns for one wave
 }
 
 // Tower – keyed by (player, tower_id)
@@ -32,6 +34,7 @@ pub struct Tower {
     pub health: u32,
     pub max_health: u32,
     pub is_alive: bool,
+    pub level: u32,     // 1-3; affects damage output
 }
 
 // Factory – keyed by (player, factory_id)

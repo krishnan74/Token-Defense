@@ -3,6 +3,7 @@ pub trait IBuildingSystem<T> {
     fn place_tower(ref self: T, tower_type: u8, x: u32, y: u32);
     fn place_factory(ref self: T, factory_type: u8, x: u32, y: u32);
     fn upgrade_factory(ref self: T, factory_id: u32);
+    fn upgrade_tower(ref self: T, tower_id: u32);
 }
 
 #[dojo::contract]
@@ -11,7 +12,7 @@ pub mod building_system {
     use starknet::get_caller_address;
     use dojo::model::ModelStorage;
     use crate::models::{GameState, Tower, Factory};
-    use crate::constants::{UPGRADE_COST, tower_max_hp, factory_cost};
+    use crate::constants::{UPGRADE_COST, tower_max_hp, factory_cost, tower_upgrade_cost};
 
     #[abi(embed_v0)]
     impl BuildingSystemImpl of IBuildingSystem<ContractState> {
@@ -34,6 +35,7 @@ pub mod building_system {
                 health: max_health,
                 max_health,
                 is_alive: true,
+                level: 1,
             };
 
             game.next_tower_id += 1;
@@ -84,6 +86,27 @@ pub mod building_system {
             factory.level += 1;
 
             world.write_model(@factory);
+            world.write_model(@game);
+        }
+
+        fn upgrade_tower(ref self: ContractState, tower_id: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+
+            let mut game: GameState = world.read_model(player);
+            assert(!game.game_over, 'Game over');
+
+            let mut tower: Tower = world.read_model((player, tower_id));
+            assert(tower.is_alive, 'Tower not alive');
+            assert(tower.level < 3, 'Tower at max level');
+
+            let cost = tower_upgrade_cost(tower.level);
+            assert(game.gold >= cost, 'Not enough gold');
+
+            game.gold -= cost;
+            tower.level += 1;
+
+            world.write_model(@tower);
             world.write_model(@game);
         }
     }

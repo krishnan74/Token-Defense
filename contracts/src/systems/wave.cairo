@@ -12,19 +12,21 @@ pub mod wave_system {
     use crate::models::{GameState, Tower, Factory};
     use crate::constants::{
         MAX_WAVES, WAVE_GOLD_BASE, WAVE_GOLD_PER_WAVE,
-        TOKEN_COST_PER_SHOT,
+        TOKEN_COST_PER_SHOT, MAX_TOKEN_BALANCE,
         TJ_HP, TJ_SPEED_X100, TJ_GOLD, TJ_BASE_DAMAGE,
         CO_HP, CO_SPEED_X100, CO_GOLD, CO_BASE_DAMAGE,
         HS_HP, HS_SPEED_X100, HS_GOLD, HS_BASE_DAMAGE,
-        wave_enemy_counts, factory_base_output,
-        get_token_tier_index, tier_dmg_mult_x100, tier_cooldown_x100,
-        tower_base_damage, compute_shots, count_path_cells_covered,
+        BOSS_HP, BOSS_SPEED_X100, BOSS_GOLD, BOSS_BASE_DAMAGE,
+        wave_enemy_counts, wave_modifier, get_enemy_trait,
+        factory_base_output, get_token_tier_index,
+        tier_dmg_mult_x100, tier_cooldown_x100,
+        tower_base_damage, tower_damage_multiplier_x100,
+        compute_shots, count_path_cells_covered,
     };
 
     // ── Event emitted when a wave resolves ────────────────────────────────────
     // enemy_outcomes: bitmask — bit i = 1 if the i-th spawned enemy was killed.
-    // Spawn order: TJ group (indices 0..tj_count-1), then CO, then HS.
-    // Clients decode this to drive a faithful per-enemy replay animation.
+    // Spawn order: TJ group (indices 0..tj_count-1), then CO, then HS, then Boss.
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
@@ -78,8 +80,15 @@ pub mod wave_system {
     }
 
     // ── Wave resolution ───────────────────────────────────────────────────────
-    // Simulates each enemy individually in spawn order.
-    // Token balances drain as towers fire, so later enemies face a weaker defence.
+    // Simulates each enemy individually in spawn order with all strategic mechanics:
+    //   - Token drain across enemies (weaker towers for later enemies)
+    //   - Token overflow cap (excess production is discarded)
+    //   - Wave modifier (Fast / Armored) applied to all enemies
+    //   - Per-enemy traits (Armored / Fast) on selected indices from wave 5
+    //   - Tower level damage multiplier (levels 1-3)
+    //   - Tower synergy bonus (+20% damage if adjacent tower of different type)
+    //   - Overclock ability (halves all cooldowns if game.overclock_used)
+    //   - Boss enemy group (waves 5 and 10)
     // Returns: (enemy_outcomes, kill_gold, base_damage, input_consumed, image_consumed, code_consumed)
 
     fn resolve_wave(
@@ -88,14 +97,26 @@ pub mod wave_system {
         player: ContractAddress,
     ) -> (u32, u32, u32, u32, u32, u32) {
         let wave = game.wave_number + 1;
-        let (tj_count, co_count, hs_count) = wave_enemy_counts(wave);
+        let (tj_count, co_count, hs_count, boss_count) = wave_enemy_counts(wave);
 
-        // Compute token production and starting balances for this wave.
+        // Wave modifier: 0=None, 1=Fast(speed×1.5), 2=Armored(HP×1.5)
+        let modifier = wave_modifier(wave);
+
+        // Compute token production and apply overflow cap.
         let (input_prod, image_prod, code_prod) =
             compute_token_production(ref world, player, game.next_factory_id);
-        let max_input = game.input_tokens + input_prod;
-        let max_image = game.image_tokens + image_prod;
-        let max_code  = game.code_tokens  + code_prod;
+
+        let raw_input = game.input_tokens + input_prod;
+        let raw_image = game.image_tokens + image_prod;
+        let raw_code  = game.code_tokens  + code_prod;
+
+        // Cap token balances — excess is discarded.
+        let max_input = if raw_input > MAX_TOKEN_BALANCE { MAX_TOKEN_BALANCE } else { raw_input };
+        let max_image = if raw_image > MAX_TOKEN_BALANCE { MAX_TOKEN_BALANCE } else { raw_image };
+        let max_code  = if raw_code  > MAX_TOKEN_BALANCE { MAX_TOKEN_BALANCE } else { raw_code  };
+
+        // Overclock: halve all tower cooldowns for this wave.
+        let overclock = game.overclock_used;
 
         // Mutable balances — drain as each enemy is processed.
         let mut cur_input = max_input;
@@ -111,11 +132,15 @@ pub mod wave_system {
         let mut i: u32 = 0;
         loop {
             if i >= tj_count { break; }
+            let trait_ = get_enemy_trait(wave, 0, i);
+            let hp  = apply_modifier_hp(TJ_HP, modifier, trait_);
+            let spd = apply_modifier_spd(TJ_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, player, game.next_tower_id,
-                TJ_HP, TJ_SPEED_X100,
+                hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
+                overclock,
             );
             if killed {
                 kill_gold += TJ_GOLD;
@@ -132,11 +157,15 @@ pub mod wave_system {
         let mut i: u32 = 0;
         loop {
             if i >= co_count { break; }
+            let trait_ = get_enemy_trait(wave, 1, i);
+            let hp  = apply_modifier_hp(CO_HP, modifier, trait_);
+            let spd = apply_modifier_spd(CO_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, player, game.next_tower_id,
-                CO_HP, CO_SPEED_X100,
+                hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
+                overclock,
             );
             if killed {
                 kill_gold += CO_GOLD;
@@ -153,17 +182,45 @@ pub mod wave_system {
         let mut i: u32 = 0;
         loop {
             if i >= hs_count { break; }
+            let trait_ = get_enemy_trait(wave, 2, i);
+            let hp  = apply_modifier_hp(HS_HP, modifier, trait_);
+            let spd = apply_modifier_spd(HS_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, player, game.next_tower_id,
-                HS_HP, HS_SPEED_X100,
+                hp, spd,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
+                overclock,
             );
             if killed {
                 kill_gold += HS_GOLD;
                 enemy_outcomes = enemy_outcomes | pow2_u32(bit_pos);
             } else {
                 base_damage += HS_BASE_DAMAGE;
+            }
+            cur_input = ni; cur_image = nim; cur_code = nc;
+            bit_pos += 1;
+            i += 1;
+        };
+
+        // ── Boss group ────────────────────────────────────────────────────────
+        let mut i: u32 = 0;
+        loop {
+            if i >= boss_count { break; }
+            let hp  = apply_modifier_hp(BOSS_HP, modifier, 0);  // no trait for boss
+            let spd = apply_modifier_spd(BOSS_SPEED_X100, modifier, 0);
+            let (killed, ni, nim, nc) = process_enemy(
+                ref world, player, game.next_tower_id,
+                hp, spd,
+                cur_input, cur_image, cur_code,
+                max_input, max_image, max_code,
+                overclock,
+            );
+            if killed {
+                kill_gold += BOSS_GOLD;
+                enemy_outcomes = enemy_outcomes | pow2_u32(bit_pos);
+            } else {
+                base_damage += BOSS_BASE_DAMAGE;
             }
             cur_input = ni; cur_image = nim; cur_code = nc;
             bit_pos += 1;
@@ -185,6 +242,9 @@ pub mod wave_system {
         game.wave_number = wave;
         game.base_health = game.base_health.saturating_sub(base_damage);
 
+        // Reset overclock ability for next wave.
+        game.overclock_used = false;
+
         if game.base_health == 0 { game.game_over = true; }
         if !game.game_over && game.wave_number >= MAX_WAVES { game.victory = true; }
 
@@ -192,9 +252,8 @@ pub mod wave_system {
     }
 
     // ── Per-enemy simulation ──────────────────────────────────────────────────
-    // Each alive tower fires `compute_shots` times at this enemy using the
-    // current token tier.  Tokens for that tower type are drained before the
-    // next enemy is processed, so the defence weakens as the wave progresses.
+    // Each alive tower fires at this enemy using the current token tier.
+    // Applies: tower level damage multiplier, synergy bonus, overclock cooldown halving.
 
     fn process_enemy(
         ref world: dojo::world::WorldStorage,
@@ -204,6 +263,7 @@ pub mod wave_system {
         speed_x100: u32,
         cur_input: u32, cur_image: u32, cur_code: u32,
         max_input: u32, max_image: u32, max_code: u32,
+        overclock: bool,
     ) -> (bool, u32, u32, u32) {
         let mut total_dmg: u32 = 0;
         let mut consume_input: u32 = 0;
@@ -228,10 +288,22 @@ pub mod wave_system {
                     let tier     = get_token_tier_index(cur_tok, max_tok);
                     let dmg_mult = tier_dmg_mult_x100(tier);
                     let cooldown = tier_cooldown_x100(tier);
-                    let base_dmg = tower_base_damage(tower.tower_type);
 
-                    let shots    = compute_shots(covered, speed_x100, cooldown);
-                    total_dmg   += shots * base_dmg * dmg_mult / 100;
+                    // Overclock: halve cooldown (more shots).
+                    let eff_cooldown = if overclock { (cooldown + 1) / 2 } else { cooldown };
+
+                    // Synergy: +20 dmg_mult if adjacent tower of different type exists.
+                    let synergy = has_synergy_neighbor(
+                        ref world, player, tower.x, tower.y, tower.tower_type, next_tower_id, tid,
+                    );
+                    let eff_dmg_mult = if synergy { dmg_mult + 20 } else { dmg_mult };
+
+                    let base_dmg  = tower_base_damage(tower.tower_type);
+                    let level_mult = tower_damage_multiplier_x100(tower.level);
+
+                    let shots = compute_shots(covered, speed_x100, eff_cooldown);
+                    // Damage = shots × base_dmg × tier_mult/100 × level_mult/100
+                    total_dmg += shots * base_dmg * eff_dmg_mult * level_mult / 10000;
 
                     let consumed = shots * TOKEN_COST_PER_SHOT;
                     if tower.tower_type == 0 {
@@ -251,6 +323,49 @@ pub mod wave_system {
         let new_code  = cur_code.saturating_sub(consume_code);
 
         (total_dmg >= enemy_hp, new_input, new_image, new_code)
+    }
+
+    // ── Synergy check ─────────────────────────────────────────────────────────
+    // Returns true if the given tower has an adjacent (Manhattan dist = 1) alive
+    // tower of a DIFFERENT type — enabling the +20% damage bonus.
+
+    fn has_synergy_neighbor(
+        ref world: dojo::world::WorldStorage,
+        player: ContractAddress,
+        tx: u32, ty: u32,
+        ttype: u8,
+        next_tower_id: u32,
+        self_id: u32,
+    ) -> bool {
+        let mut found: bool = false;
+        let mut tid: u32 = 0;
+        loop {
+            if tid >= next_tower_id || found { break; }
+            if tid != self_id {
+                let other: Tower = world.read_model((player, tid));
+                if other.is_alive && other.tower_type != ttype {
+                    let dx = if other.x >= tx { other.x - tx } else { tx - other.x };
+                    let dy = if other.y >= ty { other.y - ty } else { ty - other.y };
+                    if dx + dy == 1 { found = true; }
+                }
+            }
+            tid += 1;
+        };
+        found
+    }
+
+    // ── Modifier helpers ──────────────────────────────────────────────────────
+    // modifier: 0=None, 1=Fast(speed×1.5), 2=Armored(HP×1.5)
+    // trait_:   0=None, 1=Armored(HP×1.5), 2=Fast(speed×1.5)
+
+    fn apply_modifier_hp(base_hp: u32, modifier: u32, trait_: u32) -> u32 {
+        let after_modifier = if modifier == 2 { base_hp + base_hp / 2 } else { base_hp };
+        if trait_ == 1 { after_modifier + after_modifier / 2 } else { after_modifier }
+    }
+
+    fn apply_modifier_spd(base_spd: u32, modifier: u32, trait_: u32) -> u32 {
+        let after_modifier = if modifier == 1 { base_spd + base_spd / 2 } else { base_spd };
+        if trait_ == 2 { after_modifier + after_modifier / 2 } else { after_modifier }
     }
 
     // ── Bit helpers ───────────────────────────────────────────────────────────
