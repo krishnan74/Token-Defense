@@ -18,30 +18,26 @@ export function buildContractAddresses(
 }
 
 /**
- * Parses the minted ERC721 token_id from a Denshokan mint() receipt.
- * Handles all common OZ Cairo ERC721 Transfer event encodings:
- *   - keys=[selector, from, to, id_low, id_high]  (all #[key])
- *   - keys=[selector, from, to], data=[id_low, id_high]
- *   - keys=[selector], data=[from, to, id_low, id_high]  (all data)
+ * Parses the minted token_id from a Denshokan mint() receipt.
+ *
+ * Denshokan Transfer event (OZ ERC721, all fields #[key]):
+ *   keys = [selector, from=0x0, to=player, token_id_low, token_id_high]
+ *
+ * token_id is a u256 split across keys[3] (low) + keys[4] (high).
+ * For sequential IDs high will always be 0, so we just return the low part.
  */
 export function parseMintedTokenId(events: unknown[]): string | null {
-  const denshokan = DENSHOKAN_ADDRESS.toLowerCase();
+  const denshokanBig = BigInt(DENSHOKAN_ADDRESS);
   for (const evt of events as RawEvent[]) {
-    if (evt.from_address?.toLowerCase() !== denshokan) continue;
-    const keys = evt.keys ?? [];
-    const data = evt.data ?? [];
     try {
-      // Format A: keys=[selector, from=0, to, id_low, id_high]
+      if (BigInt(evt.from_address ?? '0x1') !== denshokanBig) continue;
+      const keys = evt.keys ?? [];
+      // Transfer: keys=[selector, from=0, to, id_low, id_high]
       if (keys.length >= 5 && BigInt(keys[1]) === 0n) {
-        return '0x' + BigInt(keys[3]).toString(16);
-      }
-      // Format B: keys=[selector, from=0, to], data=[id_low, id_high]
-      if (keys.length >= 3 && BigInt(keys[1]) === 0n && data.length >= 1) {
-        return '0x' + BigInt(data[0]).toString(16);
-      }
-      // Format C: keys=[selector], data=[from=0, to, id_low, id_high]
-      if (keys.length >= 1 && data.length >= 4 && BigInt(data[0]) === 0n) {
-        return '0x' + BigInt(data[2]).toString(16);
+        const low  = BigInt(keys[3]);
+        const high = BigInt(keys[4]);
+        const full = low + high * (2n ** 128n);
+        return '0x' + full.toString(16);
       }
     } catch {
       // malformed hex — skip
