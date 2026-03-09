@@ -76,6 +76,13 @@ export default function WavePanel({
         </div>
       )}
 
+      {/* Boss wave hint — recommend Overclock on waves 5 and 10 */}
+      {!busy && (nextWave === 5 || nextWave === 10) && overclockAvailable && (
+        <div style={styles.bossHint}>
+          ⚠ BOSS WAVE — consider using Overclock!
+        </div>
+      )}
+
       {/* Overclock button */}
       {!busy && nextWave <= 10 && (
         <button
@@ -142,6 +149,11 @@ const styles = {
     padding: '1px 7px',
     borderRadius: 0,
     boxShadow: '2px 2px 0 rgba(0,0,0,0.4)',
+  },
+  bossHint: {
+    fontFamily: "'VT323', monospace", fontSize: 15,
+    color: '#9B59B6', border: '1px solid #7B00FF',
+    padding: '1px 8px', letterSpacing: 0.5,
   },
   overclockBtn: {
     padding: '4px 12px',

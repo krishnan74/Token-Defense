@@ -63,7 +63,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'PRO TIPS',
-    body: '◆ Adjacent towers of DIFFERENT types share a +20% synergy bonus (gold glow).\n◆ Tokens are capped at 150 — overbuild factories early, not late.\n◆ Vision towers deal the most damage (14) but use rare IMAGE tokens — protect them.\n◆ Bosses appear on waves 5 and 10 — large, slow, and deal 3 HP damage to every tower they pass.\n◆ Watch the PWR% badge in the sidebar — a tower below 75% HP deals reduced damage. Repair (30g) before tough waves.',
+    body: '◆ Adjacent towers of DIFFERENT types share a +20% synergy bonus (gold glow).\n◆ Tokens are capped at 150 — overbuild factories early, not late.\n◆ Vision towers deal the most damage (14) but have SHORT range (2 tiles) and use rare IMAGE tokens — place them near path bends.\n◆ Code towers deal 1.5× AoE damage vs HalluSwarm — great for wave 7+.\n◆ Bosses appear on waves 5 and 10 — large, slow, and deal 3 HP damage to every tower they pass.\n◆ Watch the PWR% badge in the sidebar — a tower below 75% HP deals reduced damage. Repair (30g) before tough waves.',
     anchor: 'center',
     dim: true,
   },
