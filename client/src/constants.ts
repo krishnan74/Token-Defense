@@ -185,6 +185,57 @@ export function isPathTile(col: number, row: number): boolean {
   return false;
 }
 
+// ── Contract-exact simulation helpers (used by WaveReplay pre-computation) ──
+// These are direct ports of the Cairo contract functions and MUST stay in sync.
+
+/** All 19 integer path cells the contract checks for tower coverage. */
+const PATH_CELLS: [number, number][] = [
+  [13,1],[12,1],[11,1],[10,1],[9,1],  // segment 1: y=1, x 13→9
+  [9,2],[9,3],                          // segment 2: x=9, y 2→3
+  [8,3],[7,3],[6,3],[5,3],              // segment 3: y=3, x 8→5
+  [5,4],[5,5],[5,6],                    // segment 4: x=5, y 4→6
+  [4,6],[3,6],[2,6],[1,6],[0,6],        // segment 5: y=6, x 4→0
+];
+
+/** Port of contract count_path_cells_covered — exact integer cell coverage. */
+export function countPathCellsCovered(tx: number, ty: number): number {
+  let n = 0;
+  for (const [px, py] of PATH_CELLS) {
+    const dx = px - tx, dy = py - ty;
+    if (dx * dx + dy * dy <= 9) n++; // TOWER_RANGE_SQ = 9
+  }
+  return n;
+}
+
+/** Port of contract compute_shots — discrete integer shot count. */
+export function computeShots(covered: number, speedX100: number, cooldownX100: number): number {
+  if (speedX100 === 0 || cooldownX100 === 0 || covered === 0) return 0;
+  const shotsX100 = Math.floor(covered * 1_000_000 / (speedX100 * cooldownX100));
+  return Math.floor((shotsX100 + 50) / 100);
+}
+
+/** Port of contract get_token_tier_index. Returns 0–4 (Powered→Offline). */
+export function getTokenTierIndex(current: number, max: number): number {
+  if (max === 0 || current === 0) return 4;
+  if (current * 100 >= max * 60) return 0;
+  if (current * 100 >= max * 35) return 1;
+  if (current * 100 >= max * 15) return 2;
+  return 3;
+}
+
+/** Damage multiplier × 100 per tier index (mirrors tier_dmg_mult_x100). */
+export const TIER_DMG_MULT_X100 = [100, 80, 55, 30, 15] as const;
+
+/** Cooldown × 100 (seconds × 100) per tier index (mirrors tier_cooldown_x100). */
+export const TIER_COOLDOWN_X100 = [100, 130, 200, 350, 450] as const;
+
+/** Port of contract tower_damage_multiplier_x100. */
+export function towerDamageMultX100(level: number): number {
+  if (level >= 3) return 165;
+  if (level >= 2) return 130;
+  return 100;
+}
+
 // ── Conveyor helpers ───────────────────────────────────────────────────────
 export const CONVEYOR_COLORS: Record<number, string> = {
   0: '#63B3ED',
