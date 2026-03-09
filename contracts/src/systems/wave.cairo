@@ -14,6 +14,7 @@ pub mod wave_system {
         DENSHOKAN_ADDRESS,
         MAX_WAVES, WAVE_GOLD_BASE, WAVE_GOLD_PER_WAVE,
         TOKEN_COST_PER_SHOT, MAX_TOKEN_BALANCE,
+        TOWER_RANGE_SQ, VISION_RANGE_SQ, CODE_AOE_MULT_X100,
         TJ_HP, TJ_SPEED_X100, TJ_GOLD, TJ_BASE_DAMAGE,
         CO_HP, CO_SPEED_X100, CO_GOLD, CO_BASE_DAMAGE,
         HS_HP, HS_SPEED_X100, HS_GOLD, HS_BASE_DAMAGE,
@@ -149,7 +150,7 @@ pub mod wave_system {
                 hp, spd, TJ_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
-                overclock,
+                overclock, false,
             );
             if killed {
                 kill_gold += TJ_GOLD;
@@ -174,7 +175,7 @@ pub mod wave_system {
                 hp, spd, CO_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
-                overclock,
+                overclock, false,
             );
             if killed {
                 kill_gold += CO_GOLD;
@@ -199,7 +200,7 @@ pub mod wave_system {
                 hp, spd, HS_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
-                overclock,
+                overclock, true,
             );
             if killed {
                 kill_gold += HS_GOLD;
@@ -223,7 +224,7 @@ pub mod wave_system {
                 hp, spd, BOSS_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
-                overclock,
+                overclock, false,
             );
             if killed {
                 kill_gold += BOSS_GOLD;
@@ -274,6 +275,7 @@ pub mod wave_system {
         cur_input: u32, cur_image: u32, cur_code: u32,
         max_input: u32, max_image: u32, max_code: u32,
         overclock: bool,
+        is_swarm: bool,           // HalluSwarm: Code towers deal 1.5× AoE damage
     ) -> (bool, u32, u32, u32) {
         let mut total_dmg: u32 = 0;
         let mut consume_input: u32 = 0;
@@ -286,7 +288,9 @@ pub mod wave_system {
             if tid >= next_tower_id { break; }
             let tower: Tower = world.read_model((token_id, tid));
             if tower.is_alive {
-                let covered = count_path_cells_covered(tower.x, tower.y);
+                // Vision towers have reduced range (range 2 vs default range 3).
+                let range_sq = if tower.tower_type == 1 { VISION_RANGE_SQ } else { TOWER_RANGE_SQ };
+                let covered = count_path_cells_covered(tower.x, tower.y, range_sq);
                 if covered > 0 {
                     let (cur_tok, max_tok) = if tower.tower_type == 0 {
                         (cur_input, max_input)
@@ -318,7 +322,10 @@ pub mod wave_system {
                     // Damage = shots × base_dmg × tier_mult/100 × level_mult/100 × hp_mult/100
                     // Divide by 10000 first to stay within u32, then apply hp_mult/100.
                     let base_tower_dmg = shots * base_dmg * eff_dmg_mult * level_mult / 10000;
-                    total_dmg += base_tower_dmg * hp_mult / 100;
+                    let hp_scaled_dmg  = base_tower_dmg * hp_mult / 100;
+                    // Code tower AoE bonus vs HalluSwarm: 1.5× damage.
+                    let aoe_mult = if is_swarm && tower.tower_type == 2 { CODE_AOE_MULT_X100 } else { 100_u32 };
+                    total_dmg += hp_scaled_dmg * aoe_mult / 100;
 
                     let consumed = shots * TOKEN_COST_PER_SHOT;
                     if tower.tower_type == 0 {
@@ -344,7 +351,8 @@ pub mod wave_system {
                 if tid2 >= next_tower_id { break; }
                 let mut tower: Tower = world.read_model((token_id, tid2));
                 if tower.is_alive {
-                    let covered = count_path_cells_covered(tower.x, tower.y);
+                    let range_sq2 = if tower.tower_type == 1 { VISION_RANGE_SQ } else { TOWER_RANGE_SQ };
+                    let covered = count_path_cells_covered(tower.x, tower.y, range_sq2);
                     if covered > 0 {
                         if tower.health > enemy_tower_damage {
                             tower.health -= enemy_tower_damage;
