@@ -34,7 +34,7 @@
   "contracts": [
     {
       "address": "0x2194878721f2ed30e4a5eebcbfa5fc1bcefd6ddb66d8eb319ef94ef5d72ea18",
-      "class_hash": "0x30c53931c51bc48439b515d78efd181e8e7800ad82b6beedfc0285d6c45b23",
+      "class_hash": "0x1cbabefb17a3fb995f1198a05ca68b9e1be69cef50d2d936605b6e66e69b785",
       "init_calldata": [],
       "tag": "td-building_system",
       "selector": "0x1dc9fd5061f947194027cc1d616788c6d3fb9a87b7a683d1da6fd0929f89305",
@@ -45,6 +45,7 @@
         "upgrade_tower",
         "sell_tower",
         "sell_factory",
+        "repair_tower",
         "upgrade"
       ]
     },
@@ -64,7 +65,7 @@
     },
     {
       "address": "0x719db1b998b8992871ed9019fabe798fc763c83eb9a14c231938779e52f8e50",
-      "class_hash": "0x3062109d89285f8b1133b13af83d7e32d68110870ab3f4f05833f0fcb37d3ca",
+      "class_hash": "0x204ac78b2125f0c83a4ae2a87192028554ff03cb136e12bb58d1efffcf93641",
       "init_calldata": [],
       "tag": "td-wave_system",
       "selector": "0x518ab3d320fb24ae95e1805f87cd6d1647c0e625e3f79df2d74c9cd1ffee7d3",
@@ -3220,6 +3221,22 @@
             },
             {
               "name": "factory_id",
+              "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "repair_tower",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            },
+            {
+              "name": "tower_id",
               "type": "core::integer::u32"
             }
           ],

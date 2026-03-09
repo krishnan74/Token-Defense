@@ -6,6 +6,7 @@ pub trait IBuildingSystem<T> {
     fn upgrade_tower(ref self: T, token_id: felt252, tower_id: u32);
     fn sell_tower(ref self: T, token_id: felt252, tower_id: u32);
     fn sell_factory(ref self: T, token_id: felt252, factory_id: u32);
+    fn repair_tower(ref self: T, token_id: felt252, tower_id: u32);
 }
 
 #[dojo::contract]
@@ -15,7 +16,7 @@ pub mod building_system {
     use dojo::model::ModelStorage;
     use crate::models::{GameState, Tower, Factory};
     use crate::constants::{
-        UPGRADE_COST, MAX_TOWERS, GRID_W, GRID_H,
+        UPGRADE_COST, MAX_TOWERS, GRID_W, GRID_H, TOWER_REPAIR_COST,
         tower_max_hp, factory_cost, tower_upgrade_cost,
         is_blocked_tile, DENSHOKAN_ADDRESS,
     };
@@ -209,6 +210,30 @@ pub mod building_system {
             if game.active_tower_count > 0 {
                 game.active_tower_count -= 1;
             }
+
+            world.write_model(@tower);
+            world.write_model(@game);
+            post_action(denshokan, token_id);
+        }
+
+        fn repair_tower(ref self: ContractState, token_id: felt252, tower_id: u32) {
+            let denshokan = starknet::contract_address_const::<DENSHOKAN_ADDRESS>();
+            pre_action(denshokan, token_id);
+
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
+            assert(!game.game_over, 'Game over');
+
+            let mut tower: Tower = world.read_model((token_id, tower_id));
+            assert(tower.is_alive, 'Tower not alive');
+            assert(tower.health < tower.max_health, 'Tower already at full HP');
+            assert(game.gold >= TOWER_REPAIR_COST, 'Not enough gold');
+
+            game.gold -= TOWER_REPAIR_COST;
+            tower.health = tower.max_health;
 
             world.write_model(@tower);
             world.write_model(@game);

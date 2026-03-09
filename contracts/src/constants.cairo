@@ -85,6 +85,28 @@ pub const BOSS_SPEED_X100: u32 = 50;  // 0.5 tiles/s × 100
 pub const BOSS_GOLD: u32 = 15;
 pub const BOSS_BASE_DAMAGE: u32 = 5;
 
+// ── Tower repair ─────────────────────────────────────────────────────────────
+pub const TOWER_REPAIR_COST: u32 = 30; // gold to fully restore a tower's HP
+
+// HP damage dealt to each in-range tower when a surviving enemy passes through.
+// (Towers at 0 shots still count as "in range" if covered > 0.)
+// HS swarm units are too small to structurally damage a tower.
+pub const TJ_TOWER_DAMAGE:   u32 = 1;
+pub const CO_TOWER_DAMAGE:   u32 = 1;
+pub const HS_TOWER_DAMAGE:   u32 = 0;
+pub const BOSS_TOWER_DAMAGE: u32 = 3;
+
+// Tower damage output multiplier × 100 based on current HP ratio.
+// Low-health towers fire less effectively — repair to restore full power.
+pub fn tower_health_mult_x100(health: u32, max_health: u32) -> u32 {
+    if max_health == 0 { return 100; }
+    let pct = health * 100 / max_health;
+    if pct >= 75 { return 100; } // full power
+    if pct >= 50 { return 90; }  // slight degradation
+    if pct >= 25 { return 75; }  // significant — repair recommended
+    55                            // severe — tower barely functional
+}
+
 // ── Tower upgrade costs ───────────────────────────────────────────────────────
 // Returns gold cost to upgrade a tower from current_level to current_level + 1.
 pub fn tower_upgrade_cost(current_level: u32) -> u32 {
