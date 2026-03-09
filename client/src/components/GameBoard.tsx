@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   BASE_MAX_HP, BASE_X, BASE_Y, CONVEYOR_COLORS, FACTORIES,
   getTokenTier, GRID_H, GRID_W,
-  PATH_WAYPOINTS, TOKEN_NAMES, TOWER_RANGE, TOWERS,
+  PATH_WAYPOINTS, TOKEN_NAMES, TOWER_RANGE, VISION_RANGE_SQ, TOWERS,
 } from '../constants';
 import type { BuildSelection, Conveyor } from '../App';
 import type { LiveEnemy, LiveTower, WaveSnapshot } from '../simulation/WaveSimulator';
@@ -119,48 +119,83 @@ const TOWER_CFG: Record<number, { color: string; dark: string; text: string; lab
 };
 
 function TowerSprite({
-  towerType, isAlive, ghost, attackFlash,
+  towerType, isAlive, ghost, attackFlash, level,
 }: {
   towerType: number | string;
   isAlive?: boolean;
   ghost?: boolean;
   attackFlash?: boolean;
+  level?: number;
 }) {
   const cfg = TOWER_CFG[Number(towerType)] ?? TOWER_CFG[0];
-  const sz = CELL - 10;
+  const sz  = CELL - 10;
+  const lv  = level ?? 1;
+
+  // Level 3: gold border accent; Level 2: brighter border
+  const borderColor = lv === 3 ? '#FFD700' : lv === 2 ? cfg.color : cfg.dark;
+  const borderWidth = lv === 3 ? 3 : lv === 2 ? 3 : 3;
+
   return (
     <div style={{
       width: sz, height: sz,
       background: cfg.color,
-      border: `3px solid ${cfg.dark}`,
+      border: `${borderWidth}px solid ${borderColor}`,
       borderRadius: 0,
       opacity: ghost ? 0.6 : isAlive === false ? 0.25 : 1,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
       position: 'relative', overflow: 'hidden',
       boxShadow: attackFlash
         ? `0 0 0 3px #fff, 0 0 0 5px ${cfg.color}, 3px 3px 0 ${cfg.dark}`
-        : `3px 3px 0 ${cfg.dark}`,
+        : lv === 3
+          ? `3px 3px 0 ${cfg.dark}, 0 0 6px 2px rgba(255,215,0,0.4)`
+          : `3px 3px 0 ${cfg.dark}`,
       animation: ghost || isAlive === false ? 'none' : `towerGlow 2s steps(4) infinite`,
       '--tw-color': cfg.color,
       '--tw-dark': cfg.dark,
       imageRendering: 'pixelated',
       pointerEvents: 'none',
     } as React.CSSProperties}>
-      {/* Battlements */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', height: 10 }}>
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} style={{ flex: 1, background: i % 2 === 0 ? cfg.dark : cfg.color }} />
+      {/* Battlements — more blocks per level */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', height: lv >= 2 ? 12 : 10 }}>
+        {Array.from({ length: lv === 3 ? 6 : lv === 2 ? 5 : 4 }, (_, i) => (
+          <div key={i} style={{
+            flex: 1,
+            background: i % 2 === 0
+              ? (lv === 3 ? '#B8860B' : cfg.dark)
+              : (lv === 3 ? '#FFD700' : cfg.color),
+          }} />
         ))}
       </div>
-      {/* Window */}
-      <div style={{
-        position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)',
-        width: 12, height: 14, background: cfg.dark, opacity: 0.7,
-      }} />
+      {/* Window(s) — level 2 adds second window, level 3 adds diamond */}
+      {lv === 1 && (
+        <div style={{
+          position: 'absolute', top: 15, left: '50%', transform: 'translateX(-50%)',
+          width: 12, height: 14, background: cfg.dark, opacity: 0.7,
+        }} />
+      )}
+      {lv === 2 && (
+        <div style={{ position: 'absolute', top: 15, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }}>
+          <div style={{ width: 9, height: 11, background: cfg.dark, opacity: 0.8 }} />
+          <div style={{ width: 9, height: 11, background: cfg.dark, opacity: 0.8 }} />
+        </div>
+      )}
+      {lv === 3 && (
+        <>
+          <div style={{ position: 'absolute', top: 14, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5 }}>
+            <div style={{ width: 8, height: 10, background: '#7EC8E3', opacity: 0.9 }} />
+            <div style={{ width: 8, height: 10, background: '#7EC8E3', opacity: 0.9 }} />
+          </div>
+          {/* Gold diamond emblem */}
+          <div style={{
+            position: 'absolute', top: 28, left: '50%', transform: 'translateX(-50%) rotate(45deg)',
+            width: 7, height: 7, background: '#FFD700', opacity: 0.95,
+          }} />
+        </>
+      )}
       <span style={{
-        fontFamily: "'VT323', monospace", fontSize: 14, color: cfg.text,
+        fontFamily: "'VT323', monospace", fontSize: 14, color: lv === 3 ? '#FFD700' : cfg.text,
         marginBottom: 4, position: 'relative', zIndex: 1,
-        textShadow: `1px 1px 0 ${cfg.dark}`,
+        textShadow: lv === 3 ? '0 0 4px #FFD700, 1px 1px 0 #4A2510' : `1px 1px 0 ${cfg.dark}`,
       }}>{cfg.label}</span>
     </div>
   );
@@ -182,36 +217,79 @@ function FactorySprite({
   isActive?: boolean;
 }) {
   const cfg = FACTORY_CFG[Number(factoryType)] ?? FACTORY_CFG[0];
-  const sz = CELL - 16;
+  const sz  = CELL - 16;
+  const lv  = level ?? 1;
   const soldOpacity = isActive === false ? 0.25 : 1;
+
+  // Level 3: gold border
+  const borderColor = lv === 3 ? '#FFD700' : cfg.dark;
+
   return (
     <div style={{ position: 'relative', width: sz, height: sz, opacity: soldOpacity }}>
-      {/* Chimney */}
+      {/* Chimney right (all levels) */}
       <div style={{
-        position: 'absolute', right: 8, top: -10,
-        width: 10, height: 14,
+        position: 'absolute', right: 7, top: lv >= 2 ? -14 : -10,
+        width: 9, height: lv >= 2 ? 18 : 14,
         background: cfg.dark,
         border: `2px solid ${cfg.dark}`,
       }} />
+      {/* Chimney left (level 2+) */}
+      {lv >= 2 && (
+        <div style={{
+          position: 'absolute', left: 7, top: -11,
+          width: 9, height: 15,
+          background: cfg.dark,
+          border: `2px solid ${cfg.dark}`,
+        }} />
+      )}
+      {/* Smoke puffs on level 3 chimneys */}
+      {lv === 3 && (
+        <>
+          <div style={{
+            position: 'absolute', right: 6, top: -20,
+            width: 10, height: 10,
+            borderRadius: '50%',
+            background: 'rgba(200,200,200,0.55)',
+          }} />
+          <div style={{
+            position: 'absolute', left: 6, top: -19,
+            width: 10, height: 10,
+            borderRadius: '50%',
+            background: 'rgba(200,200,200,0.45)',
+          }} />
+        </>
+      )}
       {/* Body */}
       <div style={{
         position: 'absolute', inset: 0,
         background: cfg.color,
-        border: `3px solid ${cfg.dark}`,
+        border: `3px solid ${borderColor}`,
         borderRadius: 0,
         opacity: ghost ? 0.6 : 1,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        boxShadow: `3px 3px 0 ${cfg.dark}`,
+        boxShadow: lv === 3
+          ? `3px 3px 0 ${cfg.dark}, 0 0 5px 1px rgba(255,215,0,0.3)`
+          : `3px 3px 0 ${cfg.dark}`,
         pointerEvents: 'none',
       }}>
-        {/* Windows */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-          {[0, 1].map((i) => (
-            <div key={i} style={{ width: 8, height: 8, background: cfg.dark, opacity: 0.6 }} />
+        {/* Windows — more per level */}
+        <div style={{ display: 'flex', gap: lv >= 3 ? 3 : 4, marginBottom: 3 }}>
+          {Array.from({ length: lv === 3 ? 3 : 2 }, (_, i) => (
+            <div key={i} style={{
+              width: lv === 3 ? 6 : 8, height: lv === 3 ? 6 : 8,
+              background: lv === 3 ? '#7EC8E3' : cfg.dark,
+              opacity: lv === 3 ? 0.9 : 0.6,
+            }} />
           ))}
         </div>
-        <span style={{ fontFamily: "'VT323', monospace", fontSize: 13, color: cfg.accent, lineHeight: 1 }}>{cfg.label}</span>
-        {!ghost && <span style={{ fontFamily: "'VT323', monospace", fontSize: 11, color: cfg.accent, opacity: 0.75 }}>L{level}</span>}
+        <span style={{ fontFamily: "'VT323', monospace", fontSize: 13, color: lv === 3 ? '#FFD700' : cfg.accent, lineHeight: 1 }}>{cfg.label}</span>
+        {!ghost && (
+          <span style={{
+            fontFamily: "'VT323', monospace", fontSize: 11,
+            color: lv === 3 ? '#FFD700' : cfg.accent,
+            opacity: lv === 3 ? 1 : 0.75,
+          }}>L{lv}</span>
+        )}
       </div>
     </div>
   );
@@ -482,18 +560,43 @@ export default function GameBoard({
               strokeDasharray="8,6" strokeLinecap="round" strokeLinejoin="round"
             />
 
-            {/* Tower range circle on hover */}
-            {hoveredCell && selectedBuild?.type === 'tower' && !isWaveActive && (
-              <circle
-                cx={(hoveredCell.col + 0.5) * CELL}
-                cy={(hoveredCell.row + 0.5) * CELL}
-                r={TOWER_RANGE * CELL}
-                fill={hoverSynergy ? 'rgba(255,215,0,0.13)' : 'rgba(255,215,0,0.07)'}
-                stroke={hoverSynergy ? 'rgba(255,215,0,0.9)' : 'rgba(255,215,0,0.55)'}
-                strokeWidth={hoverSynergy ? 3 : 2}
-                strokeDasharray="8,5"
-              />
-            )}
+            {/* Tower range circle on hover — Vision towers have smaller range (2 vs 3) */}
+            {hoveredCell && selectedBuild?.type === 'tower' && !isWaveActive && (() => {
+              const isVision = selectedBuild.id === 1;
+              const rangeRadius = isVision ? Math.sqrt(VISION_RANGE_SQ) * CELL : TOWER_RANGE * CELL;
+              return (
+                <circle
+                  cx={(hoveredCell.col + 0.5) * CELL}
+                  cy={(hoveredCell.row + 0.5) * CELL}
+                  r={rangeRadius}
+                  fill={hoverSynergy ? 'rgba(255,215,0,0.13)' : 'rgba(255,215,0,0.07)'}
+                  stroke={hoverSynergy ? 'rgba(255,215,0,0.9)' : 'rgba(255,215,0,0.55)'}
+                  strokeWidth={hoverSynergy ? 3 : 2}
+                  strokeDasharray="8,5"
+                />
+              );
+            })()}
+
+            {/* Range ring on hover over a placed tower (no build selected) */}
+            {hoveredCell && !selectedBuild && !isWaveActive && (() => {
+              const ht = liveTowers.find((t) =>
+                t.is_alive !== false && Number(t.x) === hoveredCell.col && Number(t.y) === hoveredCell.row,
+              );
+              if (!ht) return null;
+              const isVision = Number(ht.tower_type) === 1;
+              const rangeRadius = isVision ? Math.sqrt(VISION_RANGE_SQ) * CELL : TOWER_RANGE * CELL;
+              return (
+                <circle
+                  cx={(hoveredCell.col + 0.5) * CELL}
+                  cy={(hoveredCell.row + 0.5) * CELL}
+                  r={rangeRadius}
+                  fill="rgba(255,255,255,0.04)"
+                  stroke="rgba(255,255,255,0.4)"
+                  strokeWidth={2}
+                  strokeDasharray="8,5"
+                />
+              );
+            })()}
 
             {/* Projectiles */}
             {liveSnapshot?.projectiles?.map((p) => {
@@ -677,7 +780,7 @@ export default function GameBoard({
                   boxShadow: tIsHighlighted ? '0 0 12px 3px #00E5FF, 0 0 4px 1px #00E5FF' : hasSync ? '0 0 8px 2px rgba(255,215,0,0.35)' : 'none',
                 }}
               >
-                <TowerSprite towerType={t.tower_type} isAlive={t.is_alive} attackFlash={attackFlash} />
+                <TowerSprite towerType={t.tower_type} isAlive={t.is_alive} attackFlash={attackFlash} level={Number(t.level) || 1} />
                 {tIsHighlighted && (
                   <div style={{
                     position: 'absolute', inset: -4,

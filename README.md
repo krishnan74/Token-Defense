@@ -34,12 +34,12 @@ A fully on-chain tower defense game built on StarkNet using the [Dojo](https://b
 token-defense/
 ├── contracts/          Cairo smart contracts (Dojo 1.8.0)
 │   ├── src/
-│   │   ├── models.cairo          GameState, Tower, Factory
+│   │   ├── models.cairo          GameState (incl. endless_mode), Tower, Factory
 │   │   ├── constants.cairo       All game constants + combat helpers
 │   │   └── systems/
-│   │       ├── game.cairo        new_game, activate_overclock, EGS interfaces
-│   │       ├── building.cairo    place/sell/upgrade towers + factories
-│   │       └── wave.cairo        start_wave — full on-chain simulation
+│   │       ├── game.cairo        new_game, activate_overclock, activate_endless, EGS interfaces
+│   │       ├── building.cairo    place/sell/upgrade towers + factories (level cap, fair refunds)
+│   │       └── wave.cairo        start_wave — full on-chain simulation, endless bypass
 │   └── tests/
 │       └── test_world.cairo      37 integration tests
 ├── client/             React + Vite + TypeScript frontend
@@ -65,11 +65,19 @@ token-defense/
 
 **Towers** — free to place, max 14 active at once:
 
-| Type | Name | HP | Damage | Token |
-|------|------|----|--------|-------|
-| 0 | GPT    | 100 | 10 | input  |
-| 1 | Vision | 80  | 14 | image  |
-| 2 | Code   | 90  | 12 | code   |
+| Type | Name | HP | Damage | Range | Token | Special |
+|------|------|----|--------|-------|-------|---------|
+| 0 | GPT    | 100 | 10 | 3 tiles | input  | — |
+| 1 | Vision | 80  | 14 | 2 tiles | image  | Short range — place near path bends |
+| 2 | Code   | 90  | 12 | 3 tiles | code   | 1.5× AoE damage vs HalluSwarm |
+
+Tower levels affect damage and appearance (L1=normal, L2=extra battlements, L3=gold glow):
+
+| Level | Upgrade cost | Damage mult |
+|-------|-------------|-------------|
+| L1 | — | 1.0× |
+| L2 | 80g | 1.3× |
+| L3 | 150g | 1.65× |
 
 Towers lose HP when enemies survive and pass through their range. Damaged towers deal reduced damage based on current HP:
 
@@ -84,11 +92,13 @@ Repair a tower to full HP for **30g** (only available between waves). Enemy dama
 
 **Factories** — cost gold, produce tokens each wave:
 
-| Type | Name  | Cost | Output/wave | Upgrade cost |
-|------|-------|------|-------------|--------------|
-| 0 | Input | 100g | 30 input tokens | 50g (+50%/level) |
-| 1 | Image | 200g | 10 image tokens | 50g |
+| Type | Name  | Cost | Output/wave (L1) | Upgrade cost |
+|------|-------|------|-----------------|--------------|
+| 0 | Input | 100g | 30 input tokens | 50g (+50%/level, max L3) |
+| 1 | Image | 200g | 18 image tokens | 50g |
 | 2 | Code  | 180g | 12 code tokens  | 50g |
+
+Factory levels show distinct chimney sprites (L1=1 chimney, L2=2 chimneys, L3=tall chimneys + smoke + gold glow).
 
 **Token tiers** (tokens remaining / max 150):
 
@@ -110,6 +120,8 @@ Repair a tower to full HP for **30g** (only available between waves). Enemy dama
 **Wave gold reward:** `60 + wave_number × 15`
 
 **Victory:** Survive all 10 waves with `base_health > 0`.
+
+**Endless mode:** After wave 10 victory a confirmation modal lets you continue into unlimited survival waves (wave counter keeps incrementing, no cap). Choosing to exit ends the session normally.
 
 ---
 

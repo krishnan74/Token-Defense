@@ -76,16 +76,20 @@ export function useWaveFlow({
 
       if (fetchCancelled) return;
 
-      // Decode per-type kill booleans from bitmask
+      // Decode per-type kill counts and booleans from bitmask
       const composition = WAVE_COMPOSITIONS[completedWave] ?? [];
+      const groupKills: Record<string, { killed: number; total: number }> = {};
+      for (const g of composition) groupKills[g.type] = { killed: 0, total: g.count };
       let bit = 0;
       let killedTJ = true, killedCO = true, killedHS = true, killedBoss = true;
       let killCount = 0;
       for (const g of composition) {
         for (let i = 0; i < g.count; i++) {
           const killed = !!((enemyOutcomes >>> bit) & 1);
-          if (killed) killCount++;
-          else {
+          if (killed) {
+            killCount++;
+            groupKills[g.type].killed++;
+          } else {
             if (g.type === 'TextJailbreak')   killedTJ   = false;
             if (g.type === 'ContextOverflow') killedCO   = false;
             if (g.type === 'HalluSwarm')      killedHS   = false;
@@ -111,7 +115,7 @@ export function useWaveFlow({
         baseDamageTaken,
         resultSummary: {
           waveNumber: completedWave, goldEarned, baseDamage: baseDamageTaken,
-          baseHealthRemaining, baseMaxHp, killedTJ, killedCO, killedHS, killedBoss, killCount,
+          baseHealthRemaining, baseMaxHp, killedTJ, killedCO, killedHS, killedBoss, killCount, groupKills,
         },
       };
 

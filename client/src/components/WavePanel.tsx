@@ -1,4 +1,4 @@
-import { ENEMIES, OVERCLOCK_COST, WAVE_COMPOSITIONS, WAVE_MODIFIER_INFO, getWaveModifier } from '../constants';
+import { ENEMIES, GOLD_PER_WAVE, OVERCLOCK_COST, WAVE_COMPOSITIONS, WAVE_MODIFIER_INFO, getEnemyTrait, getWaveModifier } from '../constants';
 
 interface WavePanelProps {
   gameState: { wave_number: number; is_wave_active?: boolean; overclock_used?: boolean } | null;
@@ -31,6 +31,36 @@ export default function WavePanel({
   const composition = WAVE_COMPOSITIONS[nextWave] ?? [];
   const modifier    = getWaveModifier(nextWave);
   const modInfo     = WAVE_MODIFIER_INFO[modifier];
+
+  // Gold forecast: wave bonus + max kill gold if all enemies die
+  const waveBonus   = GOLD_PER_WAVE(nextWave);
+  const killGold    = composition.reduce((sum, g) => sum + g.count * (ENEMIES[g.type]?.gold ?? 0), 0);
+  const goldForecast = waveBonus + killGold;
+
+  // Wave difficulty rating
+  const hasBoss = composition.some((g) => g.type === 'Boss');
+  const coCount = composition.find((g) => g.type === 'ContextOverflow')?.count ?? 0;
+  const hsCount = composition.find((g) => g.type === 'HalluSwarm')?.count ?? 0;
+  const diffRating = hasBoss ? { label: '★★★★★ BOSS', color: '#9B59B6' }
+    : coCount >= 4 || hsCount >= 12 ? { label: '★★★★ HARD', color: '#D9534F' }
+    : coCount >= 2 || hsCount >= 6  ? { label: '★★★ MED',  color: '#F0AD4E' }
+    : coCount >= 1                   ? { label: '★★ EASY',  color: '#5CB85C' }
+                                     : { label: '★ BASIC',  color: '#7A9A5A' };
+
+  // Enemy trait hints for wave >= 5
+  const traitHints: string[] = [];
+  if (nextWave >= 5) {
+    const groups = [
+      { name: 'TJ', groupIdx: 0, count: composition.find((g) => g.type === 'TextJailbreak')?.count ?? 0 },
+      { name: 'HS', groupIdx: 2, count: composition.find((g) => g.type === 'HalluSwarm')?.count ?? 0 },
+    ];
+    for (const { name, groupIdx, count } of groups) {
+      if (count === 0) continue;
+      const sample = getEnemyTrait(nextWave, groupIdx, groupIdx === 0 ? 2 : 0);
+      if (sample === 1) traitHints.push(`Every 3rd ${name}: Armored`);
+      if (sample === 2) traitHints.push(`Every 4th ${name}: Fast`);
+    }
+  }
 
   return (
     <div style={styles.panel}>
@@ -73,6 +103,32 @@ export default function WavePanel({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Wave difficulty + gold forecast */}
+      {!busy && composition.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: "'VT323', monospace", fontSize: 14, color: diffRating.color, letterSpacing: 0.5 }}>
+            {diffRating.label}
+          </span>
+          <span style={{ fontFamily: "'VT323', monospace", fontSize: 13, color: '#FFD700', letterSpacing: 0.5 }}>
+            +{goldForecast}g max
+          </span>
+        </div>
+      )}
+
+      {/* Enemy trait hints */}
+      {!busy && traitHints.length > 0 && (
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: 13, color: '#B8A060', letterSpacing: 0.3 }}>
+          {traitHints.join(' · ')}
+        </div>
+      )}
+
+      {/* Boss wave hint — recommend Overclock on waves 5 and 10 */}
+      {!busy && (nextWave === 5 || nextWave === 10) && overclockAvailable && (
+        <div style={styles.bossHint}>
+          ⚠ BOSS WAVE — consider using Overclock!
         </div>
       )}
 
@@ -142,6 +198,11 @@ const styles = {
     padding: '1px 7px',
     borderRadius: 0,
     boxShadow: '2px 2px 0 rgba(0,0,0,0.4)',
+  },
+  bossHint: {
+    fontFamily: "'VT323', monospace", fontSize: 15,
+    color: '#9B59B6', border: '1px solid #7B00FF',
+    padding: '1px 8px', letterSpacing: 0.5,
   },
   overclockBtn: {
     padding: '4px 12px',

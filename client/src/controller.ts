@@ -29,6 +29,7 @@ const controllerOpts = {
             { name: 'New Game',           entrypoint: 'new_game',           description: 'Initialize a new game' },
             { name: 'Quit Game',          entrypoint: 'quit_game',          description: 'Forfeit the current game session' },
             { name: 'Activate Overclock', entrypoint: 'activate_overclock', description: 'Activate the Overclock ability' },
+            { name: 'Activate Endless',   entrypoint: 'activate_endless',   description: 'Continue into endless survival mode after wave 10' },
           ],
         },
       }),

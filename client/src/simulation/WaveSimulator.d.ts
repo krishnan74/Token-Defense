@@ -23,6 +23,7 @@ export interface LiveTower {
   x: number;
   y: number;
   health: number;
+  level: number;
   is_alive: boolean;
   attackFlash: number;
 }

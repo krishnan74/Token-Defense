@@ -36,7 +36,7 @@ export const TOWERS: Record<number, TowerDef> = {
 
 export const TOWER_UPGRADE_COST: Record<number, number> = {
   1: 80,   // level 1 → 2
-  2: 120,  // level 2 → 3
+  2: 150,  // level 2 → 3
 };
 
 /** Damage multiplier per tower level (mirrors contract tower_damage_multiplier_x100). */
@@ -55,7 +55,7 @@ export interface FactoryDef {
 
 export const FACTORIES: Record<number, FactoryDef> = {
   0: { name: 'Input', cost: 100, baseOutput: 30, tokenType: 'input_tokens' },
-  1: { name: 'Image', cost: 200, baseOutput: 10, tokenType: 'image_tokens' },
+  1: { name: 'Image', cost: 200, baseOutput: 18, tokenType: 'image_tokens' },
   2: { name: 'Code',  cost: 180, baseOutput: 12, tokenType: 'code_tokens' },
 };
 
@@ -117,7 +117,7 @@ export interface EnemyDef {
 export const ENEMIES: Record<string, EnemyDef> = {
   TextJailbreak:   { hp: 20,  speed: 1.5, gold: 2,  damage: 1 },
   ContextOverflow: { hp: 28,  speed: 0.9, gold: 4,  damage: 3 },
-  HalluSwarm:      { hp: 5,   speed: 3.0, gold: 1,  damage: 1 },
+  HalluSwarm:      { hp: 5,   speed: 3.0, gold: 2,  damage: 1 },
   Boss:            { hp: 120, speed: 0.5, gold: 15, damage: 5 },
 };
 
@@ -129,7 +129,7 @@ export interface WaveGroup {
 export const WAVE_COMPOSITIONS: Record<number, WaveGroup[]> = {
   1:  [{ type: 'TextJailbreak', count: 6 }],
   2:  [{ type: 'TextJailbreak', count: 7 }],
-  3:  [{ type: 'TextJailbreak', count: 8 }],
+  3:  [{ type: 'TextJailbreak', count: 6 }, { type: 'ContextOverflow', count: 1 }],
   4:  [{ type: 'TextJailbreak', count: 6 }, { type: 'ContextOverflow', count: 2 }],
   5:  [{ type: 'TextJailbreak', count: 7 }, { type: 'ContextOverflow', count: 3 }, { type: 'Boss', count: 1 }],
   6:  [{ type: 'TextJailbreak', count: 8 }, { type: 'ContextOverflow', count: 4 }],
@@ -142,6 +142,10 @@ export const WAVE_COMPOSITIONS: Record<number, WaveGroup[]> = {
 export const GOLD_PER_WAVE = (wave: number): number => 60 + wave * 15;
 
 export const TOWER_RANGE = 3;
+export const TOWER_RANGE_SQ = 9;    // default tower range² (range 3)
+export const VISION_RANGE_SQ = 4;   // Vision tower range² (range 2)
+/** Code tower AoE damage multiplier × 100 vs HalluSwarm enemies. */
+export const CODE_AOE_MULT_X100 = 150;
 export const TICKS_PER_SEC = 60;
 
 // ── Wave modifiers ─────────────────────────────────────────────────────────
@@ -214,11 +218,11 @@ const PATH_CELLS: [number, number][] = [
 ];
 
 /** Port of contract count_path_cells_covered — exact integer cell coverage. */
-export function countPathCellsCovered(tx: number, ty: number): number {
+export function countPathCellsCovered(tx: number, ty: number, rangeSq = TOWER_RANGE_SQ): number {
   let n = 0;
   for (const [px, py] of PATH_CELLS) {
     const dx = px - tx, dy = py - ty;
-    if (dx * dx + dy * dy <= 9) n++; // TOWER_RANGE_SQ = 9
+    if (dx * dx + dy * dy <= rangeSq) n++;
   }
   return n;
 }

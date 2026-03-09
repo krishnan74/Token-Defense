@@ -44,6 +44,9 @@ export function useActions(
     activateOverclock: () =>
       call(addresses.game, 'activate_overclock', [tid]),
 
+    activateEndless: () =>
+      call(addresses.game, 'activate_endless', [tid]),
+
     placeTower: (towerType: number, x: number, y: number) =>
       call(addresses.building, 'place_tower', [tid, towerType, x, y]),
 
@@ -64,6 +67,17 @@ export function useActions(
 
     repairTower: (towerId: number | string) =>
       call(addresses.building, 'repair_tower', [tid, towerId as number]),
+
+    repairAllTowers: (towerIds: (number | string)[]) => {
+      if (!accountRef.current || !addresses.building) throw new Error('Not connected');
+      return accountRef.current.execute(
+        towerIds.map((id) => ({
+          contractAddress: addresses.building,
+          entrypoint: 'repair_tower',
+          calldata: [tid, String(id)],
+        })) as Parameters<AccountInterface['execute']>[0],
+      );
+    },
 
     startWave: () =>
       call(addresses.wave, 'start_wave', [tid]),

@@ -16,6 +16,7 @@ export interface GameState {
   base_health: number;
   difficulty: number;      // 0=Easy, 1=Normal, 2=Hard
   overclock_used: boolean; // active ability flag
+  endless_mode?: boolean;  // if true: no wave cap after wave 10
 }
 
 export interface Tower {

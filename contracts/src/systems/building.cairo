@@ -157,6 +157,7 @@ pub mod building_system {
 
             let mut factory: Factory = world.read_model((token_id, factory_id));
             assert(factory.is_active, 'Factory not active');
+            assert(factory.level < 3, 'Factory at max level');
 
             game.gold -= UPGRADE_COST;
             factory.level += 1;
@@ -211,6 +212,16 @@ pub mod building_system {
                 game.active_tower_count -= 1;
             }
 
+            // Refund 50% of upgrade gold spent (L2: 40g, L3: 115g)
+            let upgrade_refund: u32 = if tower.level == 2 {
+                40
+            } else if tower.level == 3 {
+                115
+            } else {
+                0
+            };
+            game.gold += upgrade_refund;
+
             world.write_model(@tower);
             world.write_model(@game);
             post_action(denshokan, token_id);
@@ -254,8 +265,9 @@ pub mod building_system {
             let mut factory: Factory = world.read_model((token_id, factory_id));
             assert(factory.is_active, 'Factory not active');
 
-            // Refund 50% of base cost (ignores upgrade levels)
-            let refund = factory_cost(factory.factory_type) / 2;
+            // Refund 50% of total invested (base cost + upgrade costs per level)
+            let upgrade_gold = UPGRADE_COST * (factory.level - 1);
+            let refund = (factory_cost(factory.factory_type) + upgrade_gold) / 2;
             game.gold += refund;
             factory.is_active = false;
 

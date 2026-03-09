@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FACTORIES, TOKEN_NAMES, TOWERS, TOKEN_TIERS, TIER_DMG_MULT_X100, TIER_COOLDOWN_X100 } from '../constants';
+import { FACTORIES, TOKEN_NAMES, TOWERS, TOKEN_TIERS, TIER_DMG_MULT_X100, TIER_COOLDOWN_X100, VISION_RANGE_SQ, TOWER_RANGE } from '../constants';
 import type { BuildSelection } from '../App';
 
 interface BuildMenuProps {
@@ -133,17 +133,20 @@ function TierReference({ onClose }: { onClose: () => void }) {
                   <th style={ref.th}>Name</th>
                   <th style={ref.th}>HP</th>
                   <th style={ref.th}>DMG</th>
+                  <th style={ref.th}>RNG</th>
                   <th style={ref.th}>Token</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(TOWERS).map(([id, t]) => {
                   const tokenKey = TOKEN_NAMES[t.tokenType];
+                  const tRange = Number(id) === 1 ? Math.sqrt(VISION_RANGE_SQ) : TOWER_RANGE;
                   return (
                     <tr key={id}>
                       <td style={ref.td}>{t.name}</td>
                       <td style={ref.td}>{t.hp}</td>
-                      <td style={{ ...ref.td, color: '#A8D8A8' }}>{t.damage}</td>
+                      <td style={{ ...ref.td, color: '#A8D8A8' }}>{t.damage}{Number(id) === 2 && <span style={{ color: '#FC8181', fontSize: 13 }}> AoE</span>}</td>
+                      <td style={{ ...ref.td, color: tRange < TOWER_RANGE ? '#FC8181' : '#F5E6C8' }}>{tRange}</td>
                       <td style={{ ...ref.td, color: TOKEN_COLOR[tokenKey] }}>
                         {TOKEN_ICON[tokenKey]} {TOKEN_SHORT[tokenKey]}
                       </td>
@@ -152,6 +155,9 @@ function TierReference({ onClose }: { onClose: () => void }) {
                 })}
               </tbody>
             </table>
+            <div style={{ ...ref.explain, marginTop: 6, fontSize: 15 }}>
+              AoE = Code tower deals 1.5× damage vs HalluSwarm.
+            </div>
           </div>
 
           {/* Factory stats table */}
@@ -251,9 +257,12 @@ export default function BuildMenu({ selected, onSelect, gameState, isMuted, togg
               }}
             >
               <span style={{ ...styles.cardName, color: active ? '#FFD700' : '#F5E6C8' }}>{t.name}</span>
-              <span style={styles.cardStat}>DMG {t.damage} · HP {t.hp}</span>
+              <span style={styles.cardStat}>
+                DMG {t.damage} · HP {t.hp} · RNG {numId === 1 ? Math.sqrt(VISION_RANGE_SQ) : TOWER_RANGE}
+              </span>
               <span style={{ ...styles.cardStat, color: tokColor }}>
                 {TOKEN_ICON[tokenKey]} {TOKEN_SHORT[tokenKey]} · Free
+                {numId === 2 && <span style={{ color: '#FC8181', marginLeft: 4 }}>AoE vs swarms</span>}
               </span>
             </button>
           );

@@ -23,6 +23,9 @@ import {
   PATH_WAYPOINTS,
   TOKEN_NAMES,
   TOWER_RANGE,
+  TOWER_RANGE_SQ,
+  VISION_RANGE_SQ,
+  CODE_AOE_MULT_X100,
   TOWERS,
   WAVE_COMPOSITIONS,
   getWaveModifier,
@@ -84,12 +87,13 @@ function computeKillProgress(towers) {
   for (const tower of towers) {
     const tx = Number(tower.x) + 0.5;
     const ty = Number(tower.y) + 0.5;
+    const tRange = Number(tower.tower_type) === 1 ? Math.sqrt(VISION_RANGE_SQ) : TOWER_RANGE;
     for (let s = 0; s <= 200; s++) {
       const p = s / 200;
       const pos = posAtProgress(p);
       const dx = pos.x - tx;
       const dy = pos.y - ty;
-      if (Math.sqrt(dx * dx + dy * dy) <= TOWER_RANGE) {
+      if (Math.sqrt(dx * dx + dy * dy) <= tRange) {
         if (p > maxProgress) maxProgress = p;
       }
     }
@@ -106,12 +110,13 @@ function computeEntryProgress(towers) {
   for (const tower of towers) {
     const tx = Number(tower.x) + 0.5;
     const ty = Number(tower.y) + 0.5;
+    const tRange = Number(tower.tower_type) === 1 ? Math.sqrt(VISION_RANGE_SQ) : TOWER_RANGE;
     for (let s = 0; s <= 200; s++) {
       const p = s / 200;
       const pos = posAtProgress(p);
       const dx = pos.x - tx;
       const dy = pos.y - ty;
-      if (Math.sqrt(dx * dx + dy * dy) <= TOWER_RANGE) {
+      if (Math.sqrt(dx * dx + dy * dy) <= tRange) {
         if (p < minProgress) minProgress = p;
         break; // found first entry for this tower
       }
@@ -283,6 +288,7 @@ export class WaveReplay {
     for (const entry of this._spawnQueueSnapshot) {
       const { type, enemyIndex, group, indexInGroup } = entry;
       const def = ENEMIES[type] ?? ENEMIES['TextJailbreak'];
+      const isSwarm = type === 'HalluSwarm';
 
       // Base stats as integer ×100 for speed — mirrors contract constants
       const baseSpdX100 = Math.round(def.speed * 100);
@@ -306,7 +312,9 @@ export class WaveReplay {
 
       for (const tower of this.towers) {
         const ttype   = Number(tower.tower_type);
-        const covered = countPathCellsCovered(Number(tower.x), Number(tower.y));
+        // Vision towers have reduced range — mirrors contract VISION_RANGE_SQ
+        const rangeSq = ttype === 1 ? VISION_RANGE_SQ : TOWER_RANGE_SQ;
+        const covered = countPathCellsCovered(Number(tower.x), Number(tower.y), rangeSq);
         if (covered === 0) continue;
 
         const curTok = ttype === 0 ? curInput : ttype === 1 ? curImage : curCode;
@@ -326,7 +334,10 @@ export class WaveReplay {
         const shots     = computeShots(covered, spdX100, effCooldown);
 
         // Mirrors: shots * base_dmg * eff_dmg_mult * level_mult / 10000
-        const towerDmg = Math.floor(shots * baseDmg * dmgMult * levelMult / 10000);
+        const baseTowerDmg = Math.floor(shots * baseDmg * dmgMult * levelMult / 10000);
+        // Code tower AoE bonus vs HalluSwarm: 1.5× (mirrors CODE_AOE_MULT_X100 = 150)
+        const aoeMult = (isSwarm && ttype === 2) ? CODE_AOE_MULT_X100 : 100;
+        const towerDmg = Math.floor(baseTowerDmg * aoeMult / 100);
         totalDmg += towerDmg;
 
         const consumed = shots * 2; // TOKEN_COST_PER_SHOT = 2
@@ -545,11 +556,12 @@ export class WaveReplay {
     let best = null, bestDist = Infinity;
     const tx = Number(tower.x) + 0.5;
     const ty = Number(tower.y) + 0.5;
+    const tRange = Number(tower.tower_type) === 1 ? Math.sqrt(VISION_RANGE_SQ) : TOWER_RANGE;
     for (const e of this.enemies) {
       if (!e.alive) continue;
       const dx = e.x - tx, dy = e.y - ty;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= TOWER_RANGE && dist < bestDist) { bestDist = dist; best = e; }
+      if (dist <= tRange && dist < bestDist) { bestDist = dist; best = e; }
     }
     return best;
   }

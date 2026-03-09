@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BASE_MAX_HP, FACTORIES, MAX_TOWERS, TOWER_REPAIR_COST, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp, getTowerHealthMult } from '../constants';
+import { BASE_MAX_HP, FACTORIES, MAX_TOWERS, TOWER_REPAIR_COST, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp, getTowerHealthMult, getTowerLevelMultiplier } from '../constants';
 import type { Factory, Tower } from '../dojo/models';
 
 interface TowerStatusProps {
@@ -11,13 +11,14 @@ interface TowerStatusProps {
   onSellTower: (towerId: number | string) => void;
   onSellFactory: (factoryId: number | string) => void;
   onRepairTower: (towerId: number | string) => void;
+  onRepairAll?: (towerIds: (number | string)[]) => void;
   highlightedEntityId?: string | null;
   onHighlight?: (id: string | null) => void;
 }
 
 type SidebarTab = 'active' | 'sold';
 
-export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, onRepairTower, gameState, highlightedEntityId, onHighlight }: TowerStatusProps) {
+export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, onRepairTower, onRepairAll, gameState, highlightedEntityId, onHighlight }: TowerStatusProps) {
   const [tab, setTab] = useState<SidebarTab>('active');
 
   const aliveTowerCount = (towers as Array<{ is_alive?: boolean }>).filter((t) => t.is_alive !== false).length;
@@ -70,6 +71,25 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
             <span>TOWERS</span>
             <span style={{ color: aliveTowerCount >= MAX_TOWERS ? '#D9534F' : '#6B3A1E' }}>{aliveTowerCount}/{MAX_TOWERS}</span>
           </div>
+          {/* Repair-All button: shown when 2+ towers need repair */}
+          {(() => {
+            const damagedIds = activeTowers
+              .filter((t) => Number(t.health) < Number(t.max_health))
+              .map((t) => t.tower_id);
+            const repairAllCost = damagedIds.length * TOWER_REPAIR_COST;
+            const canRepairAll = damagedIds.length >= 2 && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= repairAllCost;
+            if (damagedIds.length < 2 || gameState?.is_wave_active) return null;
+            return (
+              <button
+                style={{ ...styles.repairAllBtn, opacity: canRepairAll ? 1 : 0.4 }}
+                disabled={!canRepairAll}
+                onClick={() => onRepairAll?.(damagedIds)}
+                title={`Repair all ${damagedIds.length} damaged towers (${repairAllCost}g)`}
+              >
+                🔧 REPAIR ALL ({repairAllCost}g)
+              </button>
+            );
+          })()}
           {activeTowers.length === 0 && <div style={styles.empty}>NONE PLACED</div>}
           {activeTowers.map((t) => <TowerCard key={String(t.tower_id)} t={t} gameState={gameState} highlightedEntityId={highlightedEntityId} onHighlight={onHighlight} onUpgradeTower={onUpgradeTower} onSellTower={onSellTower} onRepairTower={onRepairTower} />)}
 
@@ -158,11 +178,9 @@ function TowerCard({ t, gameState, highlightedEntityId, onHighlight, onUpgradeTo
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={styles.sub}>{hp}/{maxHp} HP</span>
-            {hpMult < 1.0 && (
-              <span style={{ ...styles.sub, color: perfColor, fontSize: 13 }}>
-                {Math.round(hpMult * 100)}% PWR
-              </span>
-            )}
+            <span style={{ ...styles.sub, color: hpMult < 1.0 ? perfColor : '#7A8A6A', fontSize: 12 }}>
+              ~{Math.round((def?.damage ?? 0) * getTowerLevelMultiplier(level) * hpMult)}dmg
+            </span>
           </div>
           <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' as const }}>
             {level < 3 && (
@@ -211,8 +229,12 @@ function FactoryCard({ f, gameState, highlightedEntityId, onHighlight, onUpgrade
   sold?: boolean;
 }) {
   const def  = FACTORIES[Number(f.factory_type)];
-  const prod = Math.floor(def.baseOutput * (1 + 0.5 * (Number(f.level) - 1)));
-  const canUpgrade = !sold && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= 50;
+  const fLevel = Number(f.level) || 1;
+  const prod = Math.floor(def.baseOutput * (1 + 0.5 * (fLevel - 1)));
+  const atMaxLevel = fLevel >= 3;
+  const canUpgrade = !sold && !atMaxLevel && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= 50;
+  const upgradeGold = 50 * (fLevel - 1);
+  const sellRefund = Math.floor((def.cost + upgradeGold) / 2);
   const fIdStr = String(f.factory_id);
   const isFHighlighted = highlightedEntityId === `factory-${fIdStr}`;
 
@@ -238,20 +260,24 @@ function FactoryCard({ f, gameState, highlightedEntityId, onHighlight, onUpgrade
         <>
           <div style={styles.sub}>{prod} tok/wave</div>
           <div style={{ display: 'flex', gap: 4, marginTop: 0 }}>
-            <button
-              style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgrade ? 1 : 0.4 }}
-              disabled={!canUpgrade}
-              onClick={(e) => { e.stopPropagation(); onUpgrade(f.factory_id); }}
-            >
-              ↑ (50g)
-            </button>
+            {atMaxLevel ? (
+              <span style={{ ...styles.sub, fontSize: 12, color: '#FFD700', border: '1px solid #8B6900', padding: '2px 6px', marginTop: 5 }}>MAX LV</span>
+            ) : (
+              <button
+                style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgrade ? 1 : 0.4 }}
+                disabled={!canUpgrade}
+                onClick={(e) => { e.stopPropagation(); onUpgrade(f.factory_id); }}
+              >
+                ↑ (50g)
+              </button>
+            )}
             {!gameState?.is_wave_active && (
               <button
                 style={{ ...styles.sellBtn, flex: '0 0 auto' }}
                 onClick={(e) => { e.stopPropagation(); onSellFactory(f.factory_id); }}
-                title={`Sell factory (refund ${def.cost / 2}g)`}
+                title={`Sell factory (refund ${sellRefund}g incl. upgrades)`}
               >
-                ✕ {def.cost / 2}g
+                ✕ {sellRefund}g
               </button>
             )}
           </div>
@@ -337,5 +363,14 @@ const styles = {
     boxShadow: '2px 2px 0 #0A1500',
     transition: 'background 0.1s',
     flex: '0 0 auto',
+  },
+  repairAllBtn: {
+    width: '100%', padding: '4px 0',
+    background: '#0D2808', color: '#80FF80',
+    border: '2px solid #2A6A1A',
+    borderRadius: 0, cursor: 'pointer',
+    fontFamily: "'VT323', monospace", fontSize: 13,
+    boxShadow: '2px 2px 0 #0A1500',
+    letterSpacing: 0.5, marginBottom: 4,
   },
 };

@@ -12,6 +12,7 @@ pub trait IGameSystem<T> {
     fn new_game(ref self: T, token_id: felt252, difficulty: u32);
     fn quit_game(ref self: T, token_id: felt252);
     fn activate_overclock(ref self: T, token_id: felt252);
+    fn activate_endless(ref self: T, token_id: felt252);
     /// Re-registers EGS metadata after contract upgrades (dojo_init is not re-run).
     fn initialize_egs(ref self: T);
     // IMinigameTokenData (EGS)
@@ -459,6 +460,7 @@ pub mod game_system {
                 difficulty,
                 overclock_used: false,
                 active_tower_count: 0,
+                endless_mode: false,
             };
             world.write_model(@game_state);
             self.minigame.post_action(token_id);
@@ -493,6 +495,22 @@ pub mod game_system {
 
             game.gold -= OVERCLOCK_COST;
             game.overclock_used = true;
+            world.write_model(@game);
+            self.minigame.post_action(token_id);
+        }
+
+        fn activate_endless(ref self: ContractState, token_id: felt252) {
+            self.minigame.pre_action(token_id);
+
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
+            assert(game.victory, 'Must complete wave 10 first');
+            assert(!game.endless_mode, 'Already in endless mode');
+
+            game.victory = false;
+            game.endless_mode = true;
             world.write_model(@game);
             self.minigame.post_action(token_id);
         }

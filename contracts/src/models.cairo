@@ -21,6 +21,7 @@ pub struct GameState {
     pub difficulty: u32,        // 0=Easy, 1=Normal, 2=Hard
     pub overclock_used: bool,   // active ability: halves all tower cooldowns for one wave
     pub active_tower_count: u32, // number of currently placed (alive) towers
+    pub endless_mode: bool,     // if true: no victory cap; waves continue past wave 10
 }
 
 // Tower – keyed by (token_id, tower_id)

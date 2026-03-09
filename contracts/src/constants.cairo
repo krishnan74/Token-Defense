@@ -13,7 +13,10 @@ pub const GPT_DAMAGE: u32 = 10;
 pub const VISION_DAMAGE: u32 = 14;
 pub const CODE_DAMAGE: u32 = 12;
 pub const TOKEN_COST_PER_SHOT: u32 = 2;
-pub const TOWER_RANGE_SQ: u32 = 9; // range 3 tiles → 3² = 9
+pub const TOWER_RANGE_SQ: u32 = 9;       // range 3 tiles → 3² = 9
+pub const VISION_RANGE_SQ: u32 = 4;     // Vision range 2 tiles → 2² = 4
+// Code tower AoE multiplier × 100 vs HalluSwarm (splash damage bonus)
+pub const CODE_AOE_MULT_X100: u32 = 150; // 1.5× damage vs swarm enemies
 
 // ── Factory constants ─────────────────────────────────────────────────────────
 pub const INPUT_FACTORY_COST: u32 = 100;
@@ -23,7 +26,7 @@ pub const UPGRADE_COST: u32 = 50;
 
 // ── Token base production per wave per factory ────────────────────────────────
 pub const INPUT_TOKENS_BASE: u32 = 30;
-pub const IMAGE_TOKENS_BASE: u32 = 10;
+pub const IMAGE_TOKENS_BASE: u32 = 18;
 pub const CODE_TOKENS_BASE: u32 = 12;
 
 // ── Token overflow cap ────────────────────────────────────────────────────────
@@ -76,7 +79,7 @@ pub const CO_BASE_DAMAGE: u32 = 3;
 
 pub const HS_HP: u32 = 5;
 pub const HS_SPEED_X100: u32 = 300; // 3.0 tiles/s × 100
-pub const HS_GOLD: u32 = 1;
+pub const HS_GOLD: u32 = 2;
 pub const HS_BASE_DAMAGE: u32 = 1;
 
 // Boss — appears on waves 5 and 10
@@ -112,7 +115,7 @@ pub fn tower_health_mult_x100(health: u32, max_health: u32) -> u32 {
 pub fn tower_upgrade_cost(current_level: u32) -> u32 {
     match current_level {
         1 => 80,   // level 1 → 2
-        2 => 120,  // level 2 → 3
+        2 => 150,  // level 2 → 3
         _ => 9999, // already at max (level 3)
     }
 }
@@ -133,7 +136,7 @@ pub fn wave_enemy_counts(wave: u32) -> (u32, u32, u32, u32) {
     match wave {
         1  => (6,  0,  0,  0),
         2  => (7,  0,  0,  0),
-        3  => (8,  0,  0,  0),
+        3  => (6,  1,  0,  0),
         4  => (6,  2,  0,  0),
         5  => (7,  3,  0,  1),
         6  => (8,  4,  0,  0),
@@ -216,7 +219,7 @@ pub fn wave_max_kill_gold(wave: u32) -> u32 {
 
 pub fn wave_max_base_damage(wave: u32) -> u32 {
     match wave {
-        1  => 6,   2  => 7,   3  => 8,   4  => 12,
+        1  => 6,   2  => 7,   3  => 9,   4  => 12,
         5  => 21,  // 7×1 + 3×3 + 1×5
         6  => 20,  7  => 24,  8  => 28,  9  => 35,
         10 => 45,  // 10×1 + 5×3 + 15×1 + 1×5
@@ -314,31 +317,31 @@ fn dist_sq_u32(ax: u32, ay: u32, bx: u32, by: u32) -> u32 {
     dx * dx + dy * dy
 }
 
-pub fn count_path_cells_covered(tx: u32, ty: u32) -> u32 {
+pub fn count_path_cells_covered(tx: u32, ty: u32, range_sq: u32) -> u32 {
     let mut n: u32 = 0;
     // Segment 1: y=1, x from 13 to 9
-    if dist_sq_u32(tx, ty, 13, 1) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty, 12, 1) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty, 11, 1) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty, 10, 1) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  9, 1) <= TOWER_RANGE_SQ { n += 1; }
+    if dist_sq_u32(tx, ty, 13, 1) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty, 12, 1) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty, 11, 1) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty, 10, 1) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  9, 1) <= range_sq { n += 1; }
     // Segment 2: x=9, y from 2 to 3
-    if dist_sq_u32(tx, ty,  9, 2) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  9, 3) <= TOWER_RANGE_SQ { n += 1; }
+    if dist_sq_u32(tx, ty,  9, 2) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  9, 3) <= range_sq { n += 1; }
     // Segment 3: y=3, x from 8 to 5
-    if dist_sq_u32(tx, ty,  8, 3) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  7, 3) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  6, 3) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  5, 3) <= TOWER_RANGE_SQ { n += 1; }
+    if dist_sq_u32(tx, ty,  8, 3) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  7, 3) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  6, 3) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  5, 3) <= range_sq { n += 1; }
     // Segment 4: x=5, y from 4 to 6
-    if dist_sq_u32(tx, ty,  5, 4) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  5, 5) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  5, 6) <= TOWER_RANGE_SQ { n += 1; }
+    if dist_sq_u32(tx, ty,  5, 4) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  5, 5) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  5, 6) <= range_sq { n += 1; }
     // Segment 5: y=6, x from 4 to 0
-    if dist_sq_u32(tx, ty,  4, 6) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  3, 6) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  2, 6) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  1, 6) <= TOWER_RANGE_SQ { n += 1; }
-    if dist_sq_u32(tx, ty,  0, 6) <= TOWER_RANGE_SQ { n += 1; }
+    if dist_sq_u32(tx, ty,  4, 6) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  3, 6) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  2, 6) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  1, 6) <= range_sq { n += 1; }
+    if dist_sq_u32(tx, ty,  0, 6) <= range_sq { n += 1; }
     n
 }

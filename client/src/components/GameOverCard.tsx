@@ -6,9 +6,11 @@ interface GameOverCardProps {
   gameStats: GameStats;
   difficulty: number;
   onPlayAgain: () => void;
+  onEndless?: () => void;
+  endlessPending?: boolean;
 }
 
-export default function GameOverCard({ gameOver, gameStats, difficulty, onPlayAgain }: GameOverCardProps) {
+export default function GameOverCard({ gameOver, gameStats, difficulty, onPlayAgain, onEndless, endlessPending }: GameOverCardProps) {
   const maxHp = getDifficultyBaseHp(difficulty);
   return (
     <div className="app-gameover-overlay">
@@ -25,6 +27,18 @@ export default function GameOverCard({ gameOver, gameStats, difficulty, onPlayAg
         <div className="app-gameover-stats">
           Kills: {gameStats.totalKills} | Gold: {gameStats.totalGoldEarned} | Waves: {gameStats.wavesCompleted}
         </div>
+
+        {gameOver.victory && onEndless && (
+          <button
+            className="app-gameover-play-again-btn"
+            style={{ background: '#3A2A6A', borderColor: '#5A3A9A', color: '#C8B8FF', marginBottom: 6 }}
+            disabled={endlessPending}
+            onClick={onEndless}
+          >
+            {endlessPending ? 'ACTIVATING...' : '⚡ ENDLESS MODE'}
+          </button>
+        )}
+
         <button className="app-gameover-play-again-btn" onClick={onPlayAgain}>
           PLAY AGAIN
         </button>
