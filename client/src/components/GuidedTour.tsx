@@ -22,7 +22,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'RESOURCE BAR',
-    body: 'Gold funds your factories. The three token types (INPUT / IMAGE / CODE) power your towers.\n\nEach token shows its current tier — POWERED, GOOD, LOW, CRITICAL, or OFFLINE — which tells you the damage multiplier and fire rate of towers using that token.\n\nKeep all three types stocked.',
+    body: 'Gold funds your factories. The three token types (INPUT / IMAGE / CODE) power your towers.\n\nEach token shows its current tier — POWERED, GOOD, LOW, CRITICAL, or OFFLINE — which tells you the damage multiplier and fire rate of towers using that token.\n\nYour Session ID is shown on the right — click ⧉ to copy it. Use it to resume this game from any device via the Resume Game panel or the /?id= URL.',
     anchor: 'top-center',
     arrow: 'up',
     dim: true,
