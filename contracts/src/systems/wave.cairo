@@ -18,10 +18,11 @@ pub mod wave_system {
         CO_HP, CO_SPEED_X100, CO_GOLD, CO_BASE_DAMAGE,
         HS_HP, HS_SPEED_X100, HS_GOLD, HS_BASE_DAMAGE,
         BOSS_HP, BOSS_SPEED_X100, BOSS_GOLD, BOSS_BASE_DAMAGE,
+        TJ_TOWER_DAMAGE, CO_TOWER_DAMAGE, HS_TOWER_DAMAGE, BOSS_TOWER_DAMAGE,
         wave_enemy_counts, wave_modifier, get_enemy_trait,
         factory_base_output, get_token_tier_index,
         tier_dmg_mult_x100, tier_cooldown_x100,
-        tower_base_damage, tower_damage_multiplier_x100,
+        tower_base_damage, tower_damage_multiplier_x100, tower_health_mult_x100,
         compute_shots, count_path_cells_covered,
     };
     use game_components_embeddable_game_standard::minigame::minigame::{pre_action, post_action};
@@ -145,7 +146,7 @@ pub mod wave_system {
             let spd = apply_modifier_spd(TJ_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, token_id, game.next_tower_id,
-                hp, spd,
+                hp, spd, TJ_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
                 overclock,
@@ -170,7 +171,7 @@ pub mod wave_system {
             let spd = apply_modifier_spd(CO_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, token_id, game.next_tower_id,
-                hp, spd,
+                hp, spd, CO_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
                 overclock,
@@ -195,7 +196,7 @@ pub mod wave_system {
             let spd = apply_modifier_spd(HS_SPEED_X100, modifier, trait_);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, token_id, game.next_tower_id,
-                hp, spd,
+                hp, spd, HS_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
                 overclock,
@@ -219,7 +220,7 @@ pub mod wave_system {
             let spd = apply_modifier_spd(BOSS_SPEED_X100, modifier, 0);
             let (killed, ni, nim, nc) = process_enemy(
                 ref world, token_id, game.next_tower_id,
-                hp, spd,
+                hp, spd, BOSS_TOWER_DAMAGE,
                 cur_input, cur_image, cur_code,
                 max_input, max_image, max_code,
                 overclock,
@@ -269,6 +270,7 @@ pub mod wave_system {
         next_tower_id: u32,
         enemy_hp: u32,
         speed_x100: u32,
+        enemy_tower_damage: u32,  // HP each in-range tower loses if this enemy survives
         cur_input: u32, cur_image: u32, cur_code: u32,
         max_input: u32, max_image: u32, max_code: u32,
         overclock: bool,
@@ -278,6 +280,7 @@ pub mod wave_system {
         let mut consume_image: u32 = 0;
         let mut consume_code: u32 = 0;
 
+        // ── Pass 1: compute damage output from all towers ─────────────────────
         let mut tid: u32 = 0;
         loop {
             if tid >= next_tower_id { break; }
@@ -306,12 +309,16 @@ pub mod wave_system {
                     );
                     let eff_dmg_mult = if synergy { dmg_mult + 20 } else { dmg_mult };
 
-                    let base_dmg  = tower_base_damage(tower.tower_type);
+                    let base_dmg   = tower_base_damage(tower.tower_type);
                     let level_mult = tower_damage_multiplier_x100(tower.level);
+                    // Health degradation: damaged towers output less damage.
+                    let hp_mult    = tower_health_mult_x100(tower.health, tower.max_health);
 
                     let shots = compute_shots(covered, speed_x100, eff_cooldown);
-                    // Damage = shots × base_dmg × tier_mult/100 × level_mult/100
-                    total_dmg += shots * base_dmg * eff_dmg_mult * level_mult / 10000;
+                    // Damage = shots × base_dmg × tier_mult/100 × level_mult/100 × hp_mult/100
+                    // Divide by 10000 first to stay within u32, then apply hp_mult/100.
+                    let base_tower_dmg = shots * base_dmg * eff_dmg_mult * level_mult / 10000;
+                    total_dmg += base_tower_dmg * hp_mult / 100;
 
                     let consumed = shots * TOKEN_COST_PER_SHOT;
                     if tower.tower_type == 0 {
@@ -326,11 +333,36 @@ pub mod wave_system {
             tid += 1;
         };
 
+        let killed = total_dmg >= enemy_hp;
+
+        // ── Pass 2: if enemy survived, damage every in-range tower ────────────
+        // Represents the enemy physically battering through tower fire zones.
+        // Towers are never destroyed — HP floor is 1.
+        if !killed && enemy_tower_damage > 0 {
+            let mut tid2: u32 = 0;
+            loop {
+                if tid2 >= next_tower_id { break; }
+                let mut tower: Tower = world.read_model((token_id, tid2));
+                if tower.is_alive {
+                    let covered = count_path_cells_covered(tower.x, tower.y);
+                    if covered > 0 {
+                        if tower.health > enemy_tower_damage {
+                            tower.health -= enemy_tower_damage;
+                        } else {
+                            tower.health = 1;
+                        }
+                        world.write_model(@tower);
+                    }
+                }
+                tid2 += 1;
+            };
+        }
+
         let new_input = cur_input.saturating_sub(consume_input);
         let new_image = cur_image.saturating_sub(consume_image);
         let new_code  = cur_code.saturating_sub(consume_code);
 
-        (total_dmg >= enemy_hp, new_input, new_image, new_code)
+        (killed, new_input, new_image, new_code)
     }
 
     // ── Synergy check ─────────────────────────────────────────────────────────

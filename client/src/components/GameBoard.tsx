@@ -42,6 +42,10 @@ const KEYFRAMES = `
     60%  { transform: scale(1.2); opacity: 1; }
     100% { transform: scale(1);   opacity: 1; }
   }
+  @keyframes highlightPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+  }
 `;
 
 // ── Path detection ─────────────────────────────────────────────────────────
@@ -102,8 +106,8 @@ function hasSynergyNeighbor(tx: number, ty: number, ttype: number, allTowers: To
 function isCellOccupied(col: number, row: number, towers: unknown[], factories: unknown[]): boolean {
   if (col === BASE_X && row === BASE_Y) return true;
   return (
-    (towers    as Array<{ x: number; y: number }>).some((t) => Number(t.x) === col && Number(t.y) === row) ||
-    (factories as Array<{ x: number; y: number }>).some((f) => Number(f.x) === col && Number(f.y) === row)
+    (towers    as Array<{ x: number; y: number; is_alive?: boolean }>).some((t) => t.is_alive !== false && Number(t.x) === col && Number(t.y) === row) ||
+    (factories as Array<{ x: number; y: number; is_active?: boolean }>).some((f) => f.is_active !== false && Number(f.x) === col && Number(f.y) === row)
   );
 }
 
@@ -170,16 +174,18 @@ const FACTORY_CFG: Record<number, { color: string; dark: string; accent: string;
 };
 
 function FactorySprite({
-  factoryType, level, ghost,
+  factoryType, level, ghost, isActive,
 }: {
   factoryType: number | string;
   level: number;
   ghost?: boolean;
+  isActive?: boolean;
 }) {
   const cfg = FACTORY_CFG[Number(factoryType)] ?? FACTORY_CFG[0];
   const sz = CELL - 16;
+  const soldOpacity = isActive === false ? 0.25 : 1;
   return (
-    <div style={{ position: 'relative', width: sz, height: sz }}>
+    <div style={{ position: 'relative', width: sz, height: sz, opacity: soldOpacity }}>
       {/* Chimney */}
       <div style={{
         position: 'absolute', right: 8, top: -10,
@@ -258,6 +264,7 @@ const ENEMY_CFG: Record<string, {
   TextJailbreak:   { fill: '#CC1111', border: '#660000', sz: 32, anim: 'enemyBob 0.8s steps(3) infinite',    label: '?!', round: false },
   ContextOverflow: { fill: '#8B4513', border: '#4A1A00', sz: 42, anim: 'enemyBob 1.5s steps(2) infinite',    label: '∞',  round: false },
   HalluSwarm:      { fill: '#8800CC', border: '#440066', sz: 20, anim: 'swarmFlicker 0.5s steps(2) infinite', label: '~',  round: true  },
+  Boss:            { fill: '#111111', border: '#FF2200', sz: 58, anim: 'enemyBob 2.0s steps(2) infinite',    label: '☠',  round: false },
 };
 
 function EnemySprite({ enemy }: { enemy: LiveEnemy }) {
@@ -338,10 +345,12 @@ interface GameBoardProps {
   isWaveActive: boolean;
   baseHealth: number;
   conveyors: Conveyor[];
+  gold?: number;
+  highlightedEntityId?: string | null;
 }
 
 export default function GameBoard({
-  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth, conveyors,
+  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth, conveyors, gold, highlightedEntityId,
 }: GameBoardProps) {
   const [hoveredCell, setHoveredCell] = useState<{ col: number; row: number } | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -391,8 +400,11 @@ export default function GameBoard({
 
   const hoveredOccupied = hoveredCell
     && isCellOccupied(hoveredCell.col, hoveredCell.row, liveTowers, factories);
+  const canAfford = !selectedBuild || selectedBuild.type === 'tower'
+    ? true
+    : (gold ?? 0) >= (FACTORIES[selectedBuild.id]?.cost ?? 0);
   const canPlace = !!hoveredCell && !!selectedBuild && !isWaveActive && !hoveredOccupied
-    && !isPathTile(hoveredCell.col, hoveredCell.row);
+    && !isPathTile(hoveredCell.col, hoveredCell.row) && canAfford;
 
   // Auto-fit: scale the board to fill the container exactly — no manual zoom
   const BOARD_W = GRID_W * CELL;
@@ -616,11 +628,25 @@ export default function GameBoard({
           </div>
 
           {/* ── Factories ── */}
-          {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number }>).map((f) => (
-            <div key={`f-${f.factory_id}`} style={{ position: 'absolute', left: Number(f.x) * CELL + 8, top: Number(f.y) * CELL + 10, zIndex: 2, pointerEvents: 'none' }}>
-              <FactorySprite factoryType={f.factory_type} level={Number(f.level)} />
-            </div>
-          ))}
+          {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number; is_active?: boolean }>)
+          .filter((f) => !isWaveActive || f.is_active !== false)
+          .map((f) => {
+            const fIsHighlighted = highlightedEntityId === `factory-${String(f.factory_id)}`;
+            return (
+              <div key={`f-${f.factory_id}`} style={{ position: 'absolute', left: Number(f.x) * CELL + 8, top: Number(f.y) * CELL + 10, zIndex: 2, pointerEvents: 'none' }}>
+                <FactorySprite factoryType={f.factory_type} level={Number(f.level)} isActive={f.is_active} />
+                {fIsHighlighted && (
+                  <div style={{
+                    position: 'absolute', inset: -4,
+                    border: '2px solid #00E5FF',
+                    boxShadow: '0 0 10px 2px #00E5FF, 0 0 4px 1px #00E5FF',
+                    animation: 'highlightPulse 0.8s steps(2) infinite',
+                    pointerEvents: 'none',
+                  }} />
+                )}
+              </div>
+            );
+          })}
 
           {/* ── Towers ── */}
           {liveTowers.map((t) => {
@@ -637,6 +663,7 @@ export default function GameBoard({
               : null;
 
             const hasSync = synergyIds.has(String(t.tower_id));
+            const tIsHighlighted = highlightedEntityId === `tower-${String(t.tower_id)}`;
             return (
               <div
                 key={`tw-${t.tower_id}`}
@@ -645,12 +672,19 @@ export default function GameBoard({
                   left: Number(t.x) * CELL + 5,
                   top:  Number(t.y) * CELL + 5,
                   zIndex: 3, pointerEvents: 'none',
-                  outline: hasSync ? '2px solid #FFD700' : tier ? `2px solid ${tier.color}` : 'none',
+                  outline: tIsHighlighted ? '2px solid #00E5FF' : hasSync ? '2px solid #FFD700' : tier ? `2px solid ${tier.color}` : 'none',
                   outlineOffset: 2,
-                  boxShadow: hasSync ? '0 0 8px 2px rgba(255,215,0,0.35)' : 'none',
+                  boxShadow: tIsHighlighted ? '0 0 12px 3px #00E5FF, 0 0 4px 1px #00E5FF' : hasSync ? '0 0 8px 2px rgba(255,215,0,0.35)' : 'none',
                 }}
               >
                 <TowerSprite towerType={t.tower_type} isAlive={t.is_alive} attackFlash={attackFlash} />
+                {tIsHighlighted && (
+                  <div style={{
+                    position: 'absolute', inset: -4,
+                    animation: 'highlightPulse 0.8s steps(2) infinite',
+                    pointerEvents: 'none',
+                  }} />
+                )}
                 {hasSync && (
                   <div style={{
                     position: 'absolute', top: 0, right: 0,

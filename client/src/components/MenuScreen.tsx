@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { DIFFICULTY_SETTINGS } from '../constants';
 import LoreModal from './LoreModal';
 
@@ -14,15 +14,37 @@ const MENU_ENEMIES = [
   { label: '~',  name: 'HalluSwarm',      color: '#8800CC', dark: '#440066', text: '#E8B8FF', sz: 26, round: true,  desc: 'Hallucination cascade · swarm' },
 ];
 
+const panel: React.CSSProperties = {
+  background: '#1A0D05',
+  border: '2px solid #4A2510',
+  padding: '20px 24px',
+  boxShadow: '4px 4px 0 #0A0500',
+  flex: '0 0 auto',
+};
+
+const panelTitle: React.CSSProperties = {
+  fontFamily: "'VT323', monospace",
+  color: '#FFD700',
+  fontSize: 24,
+  letterSpacing: 3,
+  marginBottom: 14,
+  textShadow: '1px 1px 0 #4A2510',
+};
+
 interface MenuScreenProps {
   mode: 'connect' | 'new-game';
   selectedDifficulty?: number;
   onSelectDifficulty?: (d: number) => void;
   onAction: (() => void) | undefined;
+  urlTokenId?: string | null;
+  onResume?: (tokenId: string) => void;
+  resumeError?: string | null;
 }
 
-export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficulty, onAction }: MenuScreenProps) {
+export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficulty, onAction, urlTokenId, onResume, resumeError }: MenuScreenProps) {
   const [showLore, setShowLore] = useState(false);
+  const [resumeInput, setResumeInput] = useState(urlTokenId ?? '');
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="menu-root">
       <div className="menu-grass" />
@@ -90,31 +112,83 @@ export default function MenuScreen({ mode, selectedDifficulty, onSelectDifficult
             <div className="menu-cta-hint">Connect to play · or run the agent script and let AI defend AI</div>
           </div>
         ) : (
-          <div className="menu-difficulty-block">
-            <div className="menu-difficulty-label">SELECT DIFFICULTY</div>
-            <div className="menu-difficulty-row">
-              {DIFFICULTY_SETTINGS.map((d, i) => (
-                <button
-                  key={i}
-                  className="menu-difficulty-btn"
-                  style={{
-                    background:  selectedDifficulty === i ? d.color   : '#2C1507',
-                    borderColor: selectedDifficulty === i ? d.color   : '#4A2510',
-                    color:       selectedDifficulty === i ? '#F5E6C8' : '#A08060',
-                    boxShadow:   selectedDifficulty === i ? `0 0 8px ${d.color}80` : 'none',
-                  }}
-                  onClick={() => onSelectDifficulty?.(i)}
-                >
-                  <div style={{ fontFamily: "'VT323', monospace", fontSize: 18, letterSpacing: 1 }}>{d.label}</div>
-                  <div style={{ fontFamily: "'VT323', monospace", fontSize: 12, opacity: 0.8 }}>
-                    {d.gold}g · {d.baseHp}HP
-                  </div>
-                </button>
-              ))}
+          <div style={{ display: 'flex', gap: 24, alignItems: 'stretch', flexWrap: 'wrap' as const, justifyContent: 'center', marginTop: 8 }}>
+
+            {/* ── New Game ── */}
+            <div style={panel}>
+              <div style={panelTitle}>NEW GAME</div>
+              <div className="menu-difficulty-label" style={{ marginBottom: 8 }}>SELECT DIFFICULTY</div>
+              <div className="menu-difficulty-row">
+                {DIFFICULTY_SETTINGS.map((d, i) => (
+                  <button
+                    key={i}
+                    className="menu-difficulty-btn"
+                    style={{
+                      background:  selectedDifficulty === i ? d.color   : '#2C1507',
+                      borderColor: selectedDifficulty === i ? d.color   : '#4A2510',
+                      color:       selectedDifficulty === i ? '#F5E6C8' : '#A08060',
+                      boxShadow:   selectedDifficulty === i ? `0 0 8px ${d.color}80` : 'none',
+                    }}
+                    onClick={() => onSelectDifficulty?.(i)}
+                  >
+                    <div style={{ fontFamily: "'VT323', monospace", fontSize: 18, letterSpacing: 1 }}>{d.label}</div>
+                    <div style={{ fontFamily: "'VT323', monospace", fontSize: 12, opacity: 0.8 }}>
+                      {d.gold}g · {d.baseHp}HP
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button className="menu-play-btn" onClick={onAction} style={{ marginTop: 16, width: '100%' }}>
+                ▶  START GAME
+              </button>
             </div>
-            <button className="menu-play-btn" onClick={onAction} style={{ marginTop: 16 }}>
-              ▶  START GAME
-            </button>
+
+            {/* ── Divider ── */}
+            <div style={{ width: 2, alignSelf: 'stretch', background: '#4A2510', flexShrink: 0 }} />
+
+            {/* ── Resume Game ── */}
+            <div style={{ ...panel, flex: '1 1 300px', minWidth: 280 }}>
+              <div style={panelTitle}>RESUME GAME</div>
+              <p style={{ marginBottom: 8 }}>Enter your Game Token ID:</p>
+              <input
+                ref={inputRef}
+                value={resumeInput}
+                onChange={(e) => setResumeInput(e.target.value)}
+                placeholder="0x..."
+                style={{
+                  width: '100%', padding: '8px 12px', boxSizing: 'border-box' as const,
+                  background: '#1A0D05', color: '#F5E6C8',
+                  border: '2px solid #4A2510', borderRadius: 0,
+                  fontFamily: "'VT323', monospace", fontSize: 18,
+                  outline: 'none', marginBottom: 10,
+                }}
+              />
+              <button
+                style={{
+                  width: '100%', padding: '10px 0',
+                  background: resumeInput.trim() ? '#2A4A10' : '#1A2A08',
+                  color: resumeInput.trim() ? '#A8D8A8' : '#4A6A30',
+                  border: `2px solid ${resumeInput.trim() ? '#3A6A18' : '#2A3A10'}`,
+                  borderRadius: 0,
+                  cursor: resumeInput.trim() ? 'pointer' : 'default',
+                  fontFamily: "'VT323', monospace", fontSize: 22, letterSpacing: 1,
+                  boxShadow: resumeInput.trim() ? '3px 3px 0 #0A1A00' : 'none',
+                }}
+                disabled={!resumeInput.trim()}
+                onClick={() => resumeInput.trim() && onResume?.(resumeInput.trim())}
+              >
+                ▶  LOAD SESSION
+              </button>
+              {resumeError && (
+                <div style={{ fontFamily: "'VT323', monospace", color: '#D9534F', fontSize: 17, marginTop: 10, lineHeight: 1.4 }}>
+                  ⚠ {resumeError}
+                </div>
+              )}
+              <div style={{ fontFamily: "'VT323', monospace", color: '#4A2510', fontSize: 15, marginTop: 10, lineHeight: 1.5, borderTop: '1px solid #3A1A08', paddingTop: 8 }}>
+                Share your game: {window.location.origin}/?id=&lt;tokenId&gt;
+              </div>
+            </div>
+
           </div>
         )}
       </div>

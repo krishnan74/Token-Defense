@@ -15,7 +15,7 @@ import WavePanel from './components/WavePanel';
 import WaveResultCard from './components/WaveResultCard';
 import {
   BASE_MAX_HP, BASE_X, BASE_Y,
-  CONVEYOR_COLORS, FACTORIES, OVERCLOCK_COST, TOWERS, TOWER_UPGRADE_COST,
+  CONVEYOR_COLORS, FACTORIES, OVERCLOCK_COST, TOWER_REPAIR_COST, TOWERS, TOWER_UPGRADE_COST,
   computeConveyorTiles, getDifficultyBaseHp, isPathTile,
 } from './constants';
 import type { ConveyorTile } from './constants';
@@ -44,6 +44,11 @@ interface AppProps {
   manifest: { contracts: ManifestContract[] } | null;
 }
 
+// Read ?id= URL param once on load
+const URL_TOKEN_ID = (() => {
+  try { return new URLSearchParams(window.location.search).get('id'); } catch { return null; }
+})();
+
 export default function App({ account, manifest }: AppProps) {
   const [tokenId,           setTokenId]           = useState<string | null>(null);
   const [selectedBuild,     setSelectedBuild]     = useState<BuildSelection | null>(null);
@@ -55,12 +60,16 @@ export default function App({ account, manifest }: AppProps) {
   const [overclockPending,  setOverclockPending]  = useState(false);
   const [conveyors,         setConveyors]         = useState<Conveyor[]>([]);
   const [showTour,          setShowTour]          = useState(false);
+  const [highlightedEntityId, setHighlightedEntityId] = useState<string | null>(null);
   const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
+  const [resumeError,       setResumeError]       = useState<string | null>(null);
+  const [isResuming,        setIsResuming]        = useState(false);
 
   const clientBaseHealthRef     = useRef<number>(BASE_MAX_HP);
   const clientBaseHealthInitRef = useRef(false);
   const sfxPrevRef              = useRef({ particles: 0, shakes: 0 });
   const sfxFireCooldownRef      = useRef(0);
+  const isResumingRef           = useRef(false);
 
   const { gameState, towers, factories, refreshGameState } = useGameState(tokenId);
   const actions  = useActions(account, manifest, tokenId);
@@ -76,12 +85,15 @@ export default function App({ account, manifest }: AppProps) {
 
   const { allTowers, allFactories, optimisticGoldSpent, upgradeOptimistic,
     setOptimisticTowers, setOptimisticFactories, setOptimisticGoldSpent, setUpgradeOptimistic,
+    setRepairedTowerIds,
   } = useOptimisticEntities(towers as never, factories as never, gameState);
 
-  const displayGold = (gameState?.gold ?? 0)
+  const displayGold = Math.max(0,
+    (gameState?.gold ?? 0)
     - optimisticGoldSpent
     - upgradeOptimistic.gold
-    - (overclockPending ? OVERCLOCK_COST : 0);
+    - (overclockPending ? OVERCLOCK_COST : 0),
+  );
 
   const replay = useReplay({
     sfx, unlock,
@@ -104,12 +116,69 @@ export default function App({ account, manifest }: AppProps) {
   const bgmPhase = replay.isReplaying ? 'battle' : 'build';
   const { isMuted, toggleMute } = useBGM(bgmPhase);
 
-  // ── Load tokenId from localStorage when account connects ──────────────────
+  // ── Load tokenId from localStorage (or URL param) when account connects ───
   useEffect(() => {
     if (!account?.address) { setTokenId(null); return; }
+    // URL param takes priority — will be validated once gameState loads
+    if (URL_TOKEN_ID) { setTokenId(URL_TOKEN_ID); return; }
     const saved = localStorage.getItem(`td:tokenId:${account.address}`);
     if (saved) setTokenId(saved);
   }, [account?.address]);
+
+  // ── Sync browser URL with active tokenId ─────────────────────────────────
+  useEffect(() => {
+    if (tokenId) window.history.replaceState(null, '', `/?id=${tokenId}`);
+    else         window.history.replaceState(null, '', '/');
+  }, [tokenId]);
+
+  // ── Validate player address when resuming (URL param or manual) ───────────
+  useEffect(() => {
+    if (!gameState || !account?.address) return;
+    if (!URL_TOKEN_ID && !isResumingRef.current) return;
+    const normalize = (addr: string) => BigInt(addr).toString(16).toLowerCase();
+    try {
+      if (normalize(gameState.player.toString()) !== normalize(account.address)) {
+        setResumeError('This session belongs to a different wallet. Please connect the correct account.');
+        setTokenId(null);
+        isResumingRef.current = false;
+        setIsResuming(false);
+        return;
+      }
+    } catch { /* ignore parse errors */ }
+    if (gameState.game_over || gameState.victory) {
+      setResumeError('This game session has already ended.');
+      setTokenId(null);
+      isResumingRef.current = false;
+      setIsResuming(false);
+      return;
+    }
+    isResumingRef.current = false;
+    setIsResuming(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.token_id]);
+
+  // ── Poll Torii every 2s while resuming (subscription alone is unreliable) ──
+  useEffect(() => {
+    if (!isResuming) return;
+    const interval = setInterval(refreshGameState, 2000);
+    return () => clearInterval(interval);
+  }, [isResuming, refreshGameState]);
+
+  // ── Timeout: show error if game state never loads after resume ─────────────
+  useEffect(() => {
+    if (!isResuming) return;
+    const t = setTimeout(() => {
+      setIsResuming((current) => {
+        if (current) {
+          isResumingRef.current = false;
+          setResumeError('Session not found. Check your Token ID and try again.');
+          setTokenId(null);
+        }
+        return false;
+      });
+    }, 10000);
+    return () => clearTimeout(t);
+  }, [isResuming]);
 
   // ── Mint a Denshokan ERC721 token then call new_game ─────────────────────
   async function mintAndStart(difficulty: number): Promise<void> {
@@ -248,6 +317,7 @@ export default function App({ account, manifest }: AppProps) {
 
   function handleSellTower(id: number | string) {
     sfx.playSell();
+    setHighlightedEntityId((prev) => prev === `tower-${id}` ? null : prev);
     // Optimistically remove tower from list
     setOptimisticTowers((prev) =>
       (prev as Array<{ tower_id: string | number; is_alive?: boolean }>).map((t) =>
@@ -266,11 +336,18 @@ export default function App({ account, manifest }: AppProps) {
 
   function handleSellFactory(id: number | string) {
     sfx.playSell();
+    setHighlightedEntityId((prev) => prev === `factory-${id}` ? null : prev);
     setOptimisticFactories((prev) =>
       (prev as Array<{ factory_id: string | number; is_active?: boolean }>).map((f) =>
         String(f.factory_id) === String(id) ? { ...f, is_active: false } : f,
       ),
     );
+    // Match conveyor by factory grid position — factoryId holds a temp id that differs from the confirmed Torii id
+    const soldFactory = (allFactories as Array<{ factory_id: string | number; x: number; y: number }>)
+      .find((f) => String(f.factory_id) === String(id));
+    if (soldFactory) {
+      setConveyors((prev) => prev.filter((c) => !(c.fx === Number(soldFactory.x) && c.fy === Number(soldFactory.y))));
+    }
     actions.sellFactory(id as number).catch((e: unknown) => {
       console.error('sellFactory failed:', e);
       setOptimisticFactories((prev) =>
@@ -279,6 +356,49 @@ export default function App({ account, manifest }: AppProps) {
         ),
       );
     });
+  }
+
+  function handleRepairTower(id: number | string) {
+    sfx.playClick();
+    setOptimisticGoldSpent((prev) => prev + TOWER_REPAIR_COST);
+    setRepairedTowerIds((prev) => new Set([...prev, String(id)]));
+    actions.repairTower(id as number).then(() => {
+      // Torii will confirm with real health; clear optimistic flag
+      setRepairedTowerIds((prev) => { const next = new Set(prev); next.delete(String(id)); return next; });
+    }).catch((e: unknown) => {
+      console.error('repairTower failed:', e);
+      setOptimisticGoldSpent((prev) => Math.max(0, prev - TOWER_REPAIR_COST));
+      setRepairedTowerIds((prev) => { const next = new Set(prev); next.delete(String(id)); return next; });
+    });
+  }
+
+  function handleQuitGame() {
+    if (!tokenId || !account) return;
+    if (!window.confirm('Quit this game? This will forfeit your session on-chain and cannot be undone.')) return;
+    const quitTokenId = tokenId;
+    // Clear local session immediately
+    localStorage.removeItem(`td:tokenId:${account.address}`);
+    setTokenId(null);
+    setConveyors([]);
+    setGameOver(null);
+    setWaveResult(null);
+    setGameStats(EMPTY_STATS);
+    clientBaseHealthInitRef.current = false;
+    // Fire quit tx — best-effort, session is already cleared locally
+    actions.quitGame(quitTokenId).catch((e: unknown) => console.error('quitGame failed:', e));
+  }
+
+  function handleResume(id: string) {
+    setResumeError(null);
+    // Normalize to hex — accept decimal or short hex input
+    let normalized = id.trim();
+    if (!normalized.startsWith('0x')) {
+      try { normalized = '0x' + BigInt(normalized).toString(16); }
+      catch { setResumeError('Invalid Token ID format.'); return; }
+    }
+    isResumingRef.current = true;
+    setIsResuming(true);
+    setTokenId(normalized);
   }
 
   function handleActivateOverclock() {
@@ -295,6 +415,14 @@ export default function App({ account, manifest }: AppProps) {
     if (!selectedBuild || !gameState || isBusy) return;
     if (col === BASE_X && row === BASE_Y) return;
     if (isPathTile(col, row)) return;
+
+    // Prevent placing on a cell already occupied by a tower or factory
+    const cellOccupied =
+      (allTowers as Array<{ x: number; y: number; is_alive?: boolean }>)
+        .some((t) => t.is_alive !== false && Number(t.x) === col && Number(t.y) === row) ||
+      (allFactories as Array<{ x: number; y: number; is_active?: boolean }>)
+        .some((f) => f.is_active !== false && Number(f.x) === col && Number(f.y) === row);
+    if (cellOccupied) return;
 
     if (selectedBuild.type === 'tower') {
       const def   = TOWERS[selectedBuild.id];
@@ -383,8 +511,8 @@ export default function App({ account, manifest }: AppProps) {
       : clientBaseHealthDisplay;
 
   // ── Early returns ──────────────────────────────────────────────────────────
-  if (!account) return <MenuScreen mode="connect" onAction={undefined} />;
-  if (isStartingGame) return <LoadingScreen />;
+  if (!account) return <MenuScreen mode="connect" onAction={undefined} urlTokenId={URL_TOKEN_ID} />;
+  if (isStartingGame || isResuming) return <LoadingScreen mode={isResuming ? 'resume' : 'deploy'} />;
   if (!gameState) {
     return (
       <MenuScreen
@@ -392,6 +520,9 @@ export default function App({ account, manifest }: AppProps) {
         selectedDifficulty={selectedDifficulty}
         onSelectDifficulty={setSelectedDifficulty}
         onAction={() => handleNewGame(selectedDifficulty)}
+        urlTokenId={URL_TOKEN_ID}
+        onResume={handleResume}
+        resumeError={resumeError}
       />
     );
   }
@@ -405,7 +536,7 @@ export default function App({ account, manifest }: AppProps) {
 
   return (
     <div className="app-root">
-      <ResourceBar gameState={displayGameState} />
+      <ResourceBar gameState={displayGameState} tokenId={tokenId} />
       <WavePanel
         gameState={displayGameState}
         isWaveActive={isBusy}
@@ -413,6 +544,7 @@ export default function App({ account, manifest }: AppProps) {
         overclockAvailable={!gameState.overclock_used && !overclockPending && !isBusy && displayGold >= OVERCLOCK_COST}
         onStartWave={() => wave.handleStartWave(isBusy, displayGold)}
         onOverclock={handleActivateOverclock}
+        onQuit={handleQuitGame}
       />
       <div className="app-layout">
         <GameBoard
@@ -424,6 +556,8 @@ export default function App({ account, manifest }: AppProps) {
           isWaveActive={isBusy}
           baseHealth={displayBaseHealth}
           conveyors={conveyors}
+          gold={displayGold}
+          highlightedEntityId={highlightedEntityId}
         />
         <TowerStatus
           towers={allTowers}
@@ -433,12 +567,18 @@ export default function App({ account, manifest }: AppProps) {
           onUpgradeTower={handleUpgradeTower}
           onSellTower={handleSellTower}
           onSellFactory={handleSellFactory}
+          onRepairTower={handleRepairTower}
+          highlightedEntityId={highlightedEntityId}
+          onHighlight={setHighlightedEntityId}
         />
       </div>
       <BuildMenu
         selected={selectedBuild}
         onSelect={(s) => { sfx.playClick(); setSelectedBuild(s); }}
         gameState={displayGameState}
+        isMuted={isMuted}
+        toggleMute={toggleMute}
+        onShowTour={() => setShowTour(true)}
       />
 
       {wave.countdown !== null && (
@@ -462,14 +602,11 @@ export default function App({ account, manifest }: AppProps) {
         </button>
       )}
 
-      <button className="app-mute-btn" onClick={toggleMute} title={isMuted ? 'Unmute music' : 'Mute music'}>
-        {isMuted ? '🔇' : '🔊'}
-      </button>
-
       {waveResult && !isBusy && (
         <WaveResultCard
           result={waveResult}
           gameStats={gameStats}
+          towers={allTowers}
           onDismiss={() => setWaveResult(null)}
         />
       )}

@@ -1,4 +1,5 @@
-import { MAX_TOKEN_BALANCE } from '../constants';
+import { useState } from 'react';
+import { getTokenTier, MAX_TOKEN_BALANCE } from '../constants';
 
 interface GameStateDisplay {
   gold: number;
@@ -12,24 +13,44 @@ interface GameStateDisplay {
 function TokenDisplay({
   icon, label, value, color,
 }: { icon: string; label: string; value: number; color: string }) {
-  const pct = value / MAX_TOKEN_BALANCE;
-  const atCap  = value >= MAX_TOKEN_BALANCE;
+  const pct     = value / MAX_TOKEN_BALANCE;
+  const atCap   = value >= MAX_TOKEN_BALANCE;
   const nearCap = pct >= 0.85;
+  const tier    = getTokenTier(value, MAX_TOKEN_BALANCE);
   const displayColor = nearCap ? '#FFD700' : color;
   return (
     <div style={styles.resource}>
       <span style={styles.icon}>{icon}</span>
       <span style={styles.label}>{label}</span>
       <span style={{ ...styles.value, color: displayColor }}>{value}</span>
-      <span style={{ ...styles.cap, color: nearCap ? '#FFD700' : '#4A2510' }}>/{MAX_TOKEN_BALANCE}</span>
-      {atCap && <span style={styles.capWarning}>CAPPED</span>}
+      <span style={{ ...styles.cap, color: nearCap ? '#FFD700' : '#7A5A3A' }}>/{MAX_TOKEN_BALANCE}</span>
+      {atCap
+        ? <span style={styles.capWarning}>CAPPED</span>
+        : <span style={{ ...styles.tierBadge, background: tier.color + '30', color: tier.color, border: `1px solid ${tier.color}60` }}>
+            {tier.label}
+          </span>
+      }
     </div>
   );
 }
 
-export default function ResourceBar({ gameState }: { gameState: GameStateDisplay | null }) {
+function shorten(id: string) {
+  if (id.length <= 12) return id;
+  return id.slice(0, 6) + '…' + id.slice(-4);
+}
+
+export default function ResourceBar({ gameState, tokenId }: { gameState: GameStateDisplay | null; tokenId?: string | null }) {
+  const [copied, setCopied] = useState(false);
   if (!gameState) return null;
   const { gold, input_tokens, image_tokens, code_tokens } = gameState;
+
+  function handleCopy() {
+    if (!tokenId) return;
+    navigator.clipboard.writeText(tokenId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
 
   return (
     <div style={styles.bar}>
@@ -46,6 +67,20 @@ export default function ResourceBar({ gameState }: { gameState: GameStateDisplay
       <TokenDisplay icon="▲" label="INPUT" value={input_tokens ?? 0} color="#63B3ED" />
       <TokenDisplay icon="■" label="IMAGE" value={image_tokens ?? 0} color="#68D391" />
       <TokenDisplay icon="●" label="CODE"  value={code_tokens  ?? 0} color="#FC8181" />
+
+      {/* Token ID */}
+      {tokenId && (
+        <>
+          <div style={{ ...styles.divider, marginLeft: 'auto' }} />
+          <div style={styles.tokenIdBlock}>
+            <span style={styles.tokenIdLabel}>ID</span>
+            <span style={styles.tokenIdValue}>{shorten(tokenId)}</span>
+            <button style={styles.copyBtn} onClick={handleCopy} title="Copy Token ID">
+              {copied ? '✓' : '⧉'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -81,5 +116,23 @@ const styles = {
     color: '#FF4444', background: '#4A0000',
     padding: '1px 4px', letterSpacing: 0.5,
     border: '1px solid #6A0000', marginLeft: 2,
+  },
+  tierBadge: {
+    fontFamily: "'VT323', monospace", fontSize: 11,
+    padding: '0 4px', letterSpacing: 0.5, marginLeft: 2,
+  },
+  tokenIdBlock: {
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '0 10px',
+  },
+  tokenIdLabel: {
+    fontFamily: "'VT323', monospace", fontSize: 14, color: '#6B3A1E', letterSpacing: 1,
+  },
+  tokenIdValue: {
+    fontFamily: "'VT323', monospace", fontSize: 15, color: '#7A5A3A', letterSpacing: 0.5,
+  },
+  copyBtn: {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    color: '#6B3A1E', fontSize: 14, padding: '0 2px', lineHeight: 1,
   },
 };

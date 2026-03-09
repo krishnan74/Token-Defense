@@ -27,6 +27,7 @@ const controllerOpts = {
           description: 'Game initialisation and abilities',
           methods: [
             { name: 'New Game',           entrypoint: 'new_game',           description: 'Initialize a new game' },
+            { name: 'Quit Game',          entrypoint: 'quit_game',          description: 'Forfeit the current game session' },
             { name: 'Activate Overclock', entrypoint: 'activate_overclock', description: 'Activate the Overclock ability' },
           ],
         },
@@ -42,6 +43,7 @@ const controllerOpts = {
             { name: 'Upgrade Tower',   entrypoint: 'upgrade_tower',   description: 'Upgrade a tower level' },
             { name: 'Sell Tower',      entrypoint: 'sell_tower',      description: 'Remove a tower from the grid' },
             { name: 'Sell Factory',    entrypoint: 'sell_factory',    description: 'Remove a factory and refund 50% cost' },
+            { name: 'Repair Tower',    entrypoint: 'repair_tower',    description: 'Restore a damaged tower to full HP (30g)' },
           ],
         },
       }),

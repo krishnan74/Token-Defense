@@ -46,6 +46,22 @@ pub const BASE_MAX_HP: u32 = 25;      // Normal difficulty default
 pub const WAVE_GOLD_BASE: u32 = 60;   // base gold rewarded after each wave
 pub const WAVE_GOLD_PER_WAVE: u32 = 15; // additional gold per wave number
 
+// ── Grid bounds ───────────────────────────────────────────────────────────────
+pub const GRID_W: u32 = 12; // columns 0–11
+pub const GRID_H: u32 = 8;  // rows    0–7
+
+// ── Path / base tile detection ────────────────────────────────────────────────
+// Mirrors client-side isPathTile().  Returns true for any cell on the enemy
+// walk path OR the base cell (0,6) — neither can be built on.
+pub fn is_blocked_tile(x: u32, y: u32) -> bool {
+    if y == 1 && x >= 9 { return true; }           // row 1 cols 9-11 (entry segment)
+    if x == 9 && y >= 1 && y <= 3 { return true; } // col 9 rows 1-3
+    if y == 3 && x >= 5 && x <= 9 { return true; } // row 3 cols 5-9
+    if x == 5 && y >= 3 && y <= 6 { return true; } // col 5 rows 3-6
+    if y == 6 && x <= 5 { return true; }            // row 6 cols 0-5 (incl. base 0,6)
+    false
+}
+
 // ── Enemy constants ───────────────────────────────────────────────────────────
 // Types: 0=TextJailbreak, 1=ContextOverflow, 2=HalluSwarm, 3=Boss
 pub const TJ_HP: u32 = 20;
@@ -68,6 +84,28 @@ pub const BOSS_HP: u32 = 120;
 pub const BOSS_SPEED_X100: u32 = 50;  // 0.5 tiles/s × 100
 pub const BOSS_GOLD: u32 = 15;
 pub const BOSS_BASE_DAMAGE: u32 = 5;
+
+// ── Tower repair ─────────────────────────────────────────────────────────────
+pub const TOWER_REPAIR_COST: u32 = 30; // gold to fully restore a tower's HP
+
+// HP damage dealt to each in-range tower when a surviving enemy passes through.
+// (Towers at 0 shots still count as "in range" if covered > 0.)
+// HS swarm units are too small to structurally damage a tower.
+pub const TJ_TOWER_DAMAGE:   u32 = 1;
+pub const CO_TOWER_DAMAGE:   u32 = 1;
+pub const HS_TOWER_DAMAGE:   u32 = 0;
+pub const BOSS_TOWER_DAMAGE: u32 = 3;
+
+// Tower damage output multiplier × 100 based on current HP ratio.
+// Low-health towers fire less effectively — repair to restore full power.
+pub fn tower_health_mult_x100(health: u32, max_health: u32) -> u32 {
+    if max_health == 0 { return 100; }
+    let pct = health * 100 / max_health;
+    if pct >= 75 { return 100; } // full power
+    if pct >= 50 { return 90; }  // slight degradation
+    if pct >= 25 { return 75; }  // significant — repair recommended
+    55                            // severe — tower barely functional
+}
 
 // ── Tower upgrade costs ───────────────────────────────────────────────────────
 // Returns gold cost to upgrade a tower from current_level to current_level + 1.

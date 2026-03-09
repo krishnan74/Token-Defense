@@ -71,6 +71,17 @@ token-defense/
 | 1 | Vision | 80  | 14 | image  |
 | 2 | Code   | 90  | 12 | code   |
 
+Towers lose HP when enemies survive and pass through their range. Damaged towers deal reduced damage based on current HP:
+
+| HP % | Damage output |
+|------|--------------|
+| ≥75% | 100% (full) |
+| ≥50% | 90% |
+| ≥25% | 75% |
+| <25% | 55% |
+
+Repair a tower to full HP for **30g** (only available between waves). Enemy damage per surviving enemy: TextJailbreak=1, ContextOverflow=1, HalluSwarm=0, Boss=3 per in-range tower.
+
 **Factories** — cost gold, produce tokens each wave:
 
 | Type | Name  | Cost | Output/wave | Upgrade cost |
@@ -108,15 +119,19 @@ token-defense/
 
 ```
 For each enemy in spawn order (TextJailbreak → ContextOverflow → HalluSwarm → Boss):
-  For each alive tower in range:
-    tier       = cur_tokens / max_tokens  →  dmg_mult + cooldown
-    shots      = path_cells_covered / (speed × cooldown)
-    damage    += shots × base_dmg × tier_mult × level_mult × (1 + synergy_bonus)
-    tokens    -= shots × 2
-  if total_damage ≥ enemy_hp → killed; else → base takes damage
+  Pass 1 — compute damage:
+    For each alive tower in range:
+      tier       = cur_tokens / max_tokens  →  dmg_mult + cooldown
+      shots      = path_cells_covered / (speed × cooldown)
+      hp_mult    = tower_health_mult(tower.health, tower.max_health)  -- 100/90/75/55%
+      damage    += shots × base_dmg × tier_mult × level_mult × hp_mult × (1 + synergy_bonus)
+      tokens    -= shots × 2
+  if total_damage ≥ enemy_hp → killed; else →
+    base takes damage
+    Pass 2 — degrade towers: each in-range tower loses HP (TJ/CO=1, HS=0, Boss=3), floor=1
 ```
 
-Later enemies face weaker towers as the shared token pool depletes — making factories strategically critical.
+Later enemies face weaker towers as the shared token pool depletes — making factories strategically critical. Surviving enemies also physically degrade towers, creating meaningful decisions around tower repair.
 
 Emits `WaveResolved` event with an `enemy_outcomes` bitmask (bit i = 1 if i-th enemy killed), used by the client to animate an exact replay.
 
@@ -124,15 +139,48 @@ Emits `WaveResolved` event with an `enemy_outcomes` bitmask (bit i = 1 if i-th e
 
 ## EGS Integration
 
-Token Defense implements the [Embeddable Game Standard](https://funfactory.gg) via Denshokan ERC721 tokens. Each game session is keyed by a `token_id` minted from the Denshokan contract.
+Token Defense implements the full [Embeddable Game Standard](https://funfactory.gg) interface suite via Denshokan ERC721 tokens. Each game session is keyed by a `token_id` minted from the Denshokan contract.
 
-| Interface | Details |
-|-----------|---------|
-| `IMinigameTokenData` | `score(token_id) → wave_number × 1000 + base_health` |
-| | `game_over(token_id) → game_over \|\| victory` |
-| `IMinigameDetails` | Dynamic token name, description, and 7 live game state fields |
-| `IMinigameSettings` | Named difficulty configurations (Easy / Normal / Hard) |
-| `IMinigameObjectives` | 5 on-chain achievements (First Wave, Midpoint, Victory, Untouched, Iron Sentinel) |
+> **The EGS Token ID is your game session key.** Every on-chain action (place tower, start wave, etc.) is tied to the token ID minted at game start. To resume a session — on the same device or another — enter your token ID on the Resume Game panel, or open a shared link: `https://token-defense.vercel.app/?id=<tokenId>`. The token ID is displayed in the in-game resource bar with a one-click copy button.
+
+### `IMinigameTokenData`
+
+| Function | Details |
+|----------|---------|
+| `score(token_id)` | `wave_number × 1000 + base_health` |
+| `game_over(token_id)` | `game_over \|\| victory` |
+| `score_batch` / `game_over_batch` | Batch variants for leaderboard queries |
+
+### `IMinigameDetails`
+
+| Function | Details |
+|----------|---------|
+| `token_name(token_id)` | Returns `"Token Defense"` |
+| `token_description(token_id)` | Dynamic: difficulty + wave progress + victory/defeat status + score |
+| `game_details(token_id)` | 7 live fields: Wave, Base HP, Gold, Towers, Factories, Difficulty, Status |
+| `*_batch` variants | All three functions support batch calls |
+
+### `IMinigameSettings`
+
+Named difficulty configurations (settings IDs 1–3):
+
+| ID | Name | Gold | Base HP | Tokens |
+|----|------|------|---------|--------|
+| 1 | Easy | 300 | 30 | High |
+| 2 | Normal | 200 | 20 | Standard |
+| 3 | Hard | 120 | 10 | Scarce |
+
+### `IMinigameObjectives`
+
+5 trackable on-chain achievements:
+
+| ID | Name | Condition |
+|----|------|-----------|
+| 1 | First Line Cleared | Survive wave 1 |
+| 2 | Midpoint Defender | Survive wave 5 |
+| 3 | Cyber Defender | Complete all 10 waves (victory) |
+| 4 | Untouched | Victory with full base HP remaining |
+| 5 | Iron Sentinel | Victory on Hard difficulty |
 
 ---
 

@@ -38,6 +38,9 @@ export function useActions(
     newGame: (difficulty: number, overrideTokenId?: string) =>
       call(addresses.game, 'new_game', [overrideTokenId ?? tid, difficulty]),
 
+    quitGame: (overrideTokenId?: string) =>
+      call(addresses.game, 'quit_game', [overrideTokenId ?? tid]),
+
     activateOverclock: () =>
       call(addresses.game, 'activate_overclock', [tid]),
 
@@ -58,6 +61,9 @@ export function useActions(
 
     sellFactory: (factoryId: number | string) =>
       call(addresses.building, 'sell_factory', [tid, factoryId as number]),
+
+    repairTower: (towerId: number | string) =>
+      call(addresses.building, 'repair_tower', [tid, towerId as number]),
 
     startWave: () =>
       call(addresses.wave, 'start_wave', [tid]),

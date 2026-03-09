@@ -28,6 +28,13 @@ import {
   getWaveModifier,
   getEnemyTrait,
   getTowerLevelMultiplier,
+  // Contract-exact simulation helpers
+  countPathCellsCovered,
+  computeShots,
+  getTokenTierIndex,
+  TIER_DMG_MULT_X100,
+  TIER_COOLDOWN_X100,
+  towerDamageMultX100,
 } from '../constants.js';
 
 let _nextId = 0;
@@ -70,7 +77,7 @@ function posAtProgress(progress) {
 
 /**
  * Compute the path progress at which the last tower can no longer cover an enemy.
- * Killed enemies will die at or just past this point.
+ * This is the global latest kill point across all towers.
  */
 function computeKillProgress(towers) {
   let maxProgress = 0.30;
@@ -88,6 +95,29 @@ function computeKillProgress(towers) {
     }
   }
   return Math.min(maxProgress + 0.04, 0.88);
+}
+
+/**
+ * Compute the path progress at which enemies first enter any tower's range.
+ * Used as the start of the "kill zone" for per-enemy kill progress interpolation.
+ */
+function computeEntryProgress(towers) {
+  let minProgress = 0.15;
+  for (const tower of towers) {
+    const tx = Number(tower.x) + 0.5;
+    const ty = Number(tower.y) + 0.5;
+    for (let s = 0; s <= 200; s++) {
+      const p = s / 200;
+      const pos = posAtProgress(p);
+      const dx = pos.x - tx;
+      const dy = pos.y - ty;
+      if (Math.sqrt(dx * dx + dy * dy) <= TOWER_RANGE) {
+        if (p < minProgress) minProgress = p;
+        break; // found first entry for this tower
+      }
+    }
+  }
+  return Math.max(0.02, minProgress);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -176,16 +206,19 @@ export class WaveReplay {
         attackFlash:  0,
       }));
 
-    // Kill point: path progress at which killed enemies die.
-    this._killProgress = this.towers.length > 0
-      ? computeKillProgress(this.towers)
-      : 0.65;
+    // Kill zone: global entry/exit progress for tower coverage
+    this._killProgress  = this.towers.length > 0 ? computeKillProgress(this.towers)  : 0.65;
+    this._entryProgress = this.towers.length > 0 ? computeEntryProgress(this.towers) : 0.10;
 
-    // Spawn queue
-    this.spawnQueue  = buildSpawnQueue(waveNumber);
-    this.spawnTimer  = 0;
-    this.enemies     = [];
-    this._allSpawned = false;
+    // Spawn queue — snapshot saved for pre-computation before it is consumed
+    this.spawnQueue          = buildSpawnQueue(waveNumber);
+    this._spawnQueueSnapshot = [...this.spawnQueue];
+    this.spawnTimer          = 0;
+    this.enemies             = [];
+    this._allSpawned         = false;
+
+    // Pre-computation: run exact contract simulation to get per-enemy data
+    this._enemyDataMap = this._precomputeEnemyData();
 
     // Visual effects
     this.projectiles   = [];
@@ -226,6 +259,119 @@ export class WaveReplay {
 
   // ── Private helpers ─────────────────────────────────────────────────────────
 
+  /**
+   * Runs the exact contract simulation (resolve_wave / process_enemy) as a
+   * pre-computation pass before animation starts.
+   *
+   * Mirrors the contract exactly:
+   *   - Sequential enemy processing (token state carries over between enemies)
+   *   - Integer HP / speed modifiers (floor division, matching Cairo)
+   *   - Discrete shot computation (computeShots)
+   *   - Token tier from cur/max token state at processing time
+   *
+   * Returns Map<enemyIndex, {hp, spdX100, totalDamage, killed,
+   *   tokens_before, tokens_consumed, killProgress, maxVisualDamage}>
+   */
+  _precomputeEnemyData() {
+    const result = new Map();
+
+    // Start from maxTokens (= pre-wave balances + this wave's production, capped)
+    let curInput = this.maxTokens.input_tokens;
+    let curImage = this.maxTokens.image_tokens;
+    let curCode  = this.maxTokens.code_tokens;
+
+    for (const entry of this._spawnQueueSnapshot) {
+      const { type, enemyIndex, group, indexInGroup } = entry;
+      const def = ENEMIES[type] ?? ENEMIES['TextJailbreak'];
+
+      // Base stats as integer ×100 for speed — mirrors contract constants
+      const baseSpdX100 = Math.round(def.speed * 100);
+
+      // Apply wave modifier using integer arithmetic (mirrors apply_modifier_*)
+      let hp      = def.hp;
+      let spdX100 = baseSpdX100;
+      if (this._waveModifier === 2) hp      = hp      + Math.floor(hp      / 2); // Armored
+      if (this._waveModifier === 1) spdX100 = spdX100 + Math.floor(spdX100 / 2); // Fast
+
+      // Apply per-enemy trait (non-boss, wave ≥ 5)
+      if (type !== 'Boss') {
+        const trait = getEnemyTrait(this._waveNumber, group, indexInGroup);
+        if (trait === 1) hp      = hp      + Math.floor(hp      / 2); // Armored trait
+        if (trait === 2) spdX100 = spdX100 + Math.floor(spdX100 / 2); // Fast trait
+      }
+
+      // Process all towers against this enemy — mirrors contract process_enemy
+      let totalDmg = 0;
+      let conInput = 0, conImage = 0, conCode = 0;
+
+      for (const tower of this.towers) {
+        const ttype   = Number(tower.tower_type);
+        const covered = countPathCellsCovered(Number(tower.x), Number(tower.y));
+        if (covered === 0) continue;
+
+        const curTok = ttype === 0 ? curInput : ttype === 1 ? curImage : curCode;
+        const maxTok = ttype === 0 ? this.maxTokens.input_tokens
+                     : ttype === 1 ? this.maxTokens.image_tokens
+                     :               this.maxTokens.code_tokens;
+
+        const tier       = getTokenTierIndex(curTok, maxTok);
+        let   dmgMult    = TIER_DMG_MULT_X100[tier] ?? 15;
+        const cooldown   = TIER_COOLDOWN_X100[tier] ?? 450;
+        const effCooldown = this._overclockActive ? Math.ceil(cooldown / 2) : cooldown;
+
+        if (this._hasSynergyNeighbor(tower)) dmgMult += 20; // synergy +20%
+
+        const levelMult = towerDamageMultX100(Number(tower.level));
+        const baseDmg   = TOWERS[ttype]?.damage ?? 10;
+        const shots     = computeShots(covered, spdX100, effCooldown);
+
+        // Mirrors: shots * base_dmg * eff_dmg_mult * level_mult / 10000
+        const towerDmg = Math.floor(shots * baseDmg * dmgMult * levelMult / 10000);
+        totalDmg += towerDmg;
+
+        const consumed = shots * 2; // TOKEN_COST_PER_SHOT = 2
+        if (ttype === 0) conInput += consumed;
+        else if (ttype === 1) conImage += consumed;
+        else conCode += consumed;
+      }
+
+      const killed = !!((this._enemyOutcomes >>> enemyIndex) & 1);
+
+      // Per-enemy kill progress: how far into the tower zone before death
+      // Fraction = hp / totalDamage → fraction=1 means barely killed (late death),
+      //   fraction<1 means overkill (early death), fraction>1 means survivor
+      let killProgress;
+      let maxVisualDamage;
+      if (killed && totalDmg > 0) {
+        const fraction  = Math.min(1.0, hp / totalDmg);
+        killProgress    = this._entryProgress + (this._killProgress - this._entryProgress) * fraction;
+        killProgress    = Math.min(0.91, Math.max(this._entryProgress + 0.02, killProgress));
+        maxVisualDamage = hp; // killed enemies fully drain
+      } else {
+        killProgress    = 2.0; // unreachable — survivor never triggers kill
+        maxVisualDamage = Math.max(0, Math.min(hp - 1, totalDmg)); // show partial damage
+      }
+
+      result.set(enemyIndex, {
+        hp,
+        spdX100,
+        totalDamage: totalDmg,
+        killed,
+        tokens_before:    { input: curInput, image: curImage, code: curCode },
+        tokens_consumed:  { input: conInput, image: conImage, code: conCode },
+        killProgress,
+        maxVisualDamage,
+      });
+
+      // Carry over drained tokens to next enemy (sequential model)
+      curInput = Math.max(0, curInput - conInput);
+      curImage = Math.max(0, curImage - conImage);
+      curCode  = Math.max(0, curCode  - conCode);
+    }
+
+    return result;
+  }
+
   _processSpawns(dt) {
     if (this._allSpawned) return;
     this.spawnTimer += dt;
@@ -243,40 +389,52 @@ export class WaveReplay {
   }
 
   _buildEnemy(type, enemyIndex, group, indexInGroup) {
-    const def = ENEMIES[type] ?? ENEMIES['TextJailbreak'];
-    const wp0 = PATH_WAYPOINTS[0];
-    const killed = !!((this._enemyOutcomes >>> enemyIndex) & 1);
+    const def  = ENEMIES[type] ?? ENEMIES['TextJailbreak'];
+    const wp0  = PATH_WAYPOINTS[0];
+    const data = this._enemyDataMap.get(enemyIndex);
 
-    // Apply wave modifier: 1=Fast(speed×1.5), 2=Armored(HP×1.5)
-    let hp    = def.hp;
-    let speed = def.speed;
-    if (this._waveModifier === 2) hp    = Math.floor(hp    * 1.5);
-    if (this._waveModifier === 1) speed = speed * 1.5;
-
-    // Apply per-enemy trait (only for non-boss enemies, from wave 5)
-    if (type !== 'Boss') {
-      const trait = getEnemyTrait(this._waveNumber, group, indexInGroup);
-      if (trait === 1) hp    = Math.floor(hp    * 1.5); // Armored trait
-      if (trait === 2) speed = speed * 1.5;             // Fast trait
+    // Use precomputed HP / speed (contract-exact integer arithmetic).
+    // Fallback to float approximation if precomputation is missing.
+    let hp, speed;
+    if (data) {
+      hp    = data.hp;
+      speed = data.spdX100 / 100;
+    } else {
+      hp    = def.hp;
+      speed = def.speed;
+      if (this._waveModifier === 2) hp    = Math.floor(hp    * 1.5);
+      if (this._waveModifier === 1) speed = speed * 1.5;
+      if (type !== 'Boss') {
+        const trait = getEnemyTrait(this._waveNumber, group, indexInGroup);
+        if (trait === 1) hp    = Math.floor(hp    * 1.5);
+        if (trait === 2) speed = speed * 1.5;
+      }
     }
 
+    const killed          = data ? data.killed : !!((this._enemyOutcomes >>> enemyIndex) & 1);
+    const killProgress    = data ? data.killProgress    : this._killProgress;
+    const maxVisualDamage = data ? data.maxVisualDamage : (killed ? hp : Math.floor(hp * 0.7));
+
     return {
-      id:            uid(),
+      id:             uid(),
       type,
       enemyIndex,
       group,
       indexInGroup,
       killed,
-      x:             wp0.x,
-      y:             wp0.y,
-      waypointIndex: 1,
-      pathProgress:  0,
+      x:              wp0.x,
+      y:              wp0.y,
+      waypointIndex:  1,
+      pathProgress:   0,
       hp,
-      maxHp: hp,
+      maxHp:          hp,
       speed,
-      gold:          def.gold,
-      alive:         true,
-      hitFlash:      0,
+      gold:           def.gold,
+      alive:          true,
+      hitFlash:       0,
+      killProgress,       // per-enemy: where on the path they die
+      maxVisualDamage,    // per-enemy: max visual damage shown (hp-1 for survivors)
+      damageTaken:    0,  // tracks visual damage so we can cap survivors
     };
   }
 
@@ -284,10 +442,13 @@ export class WaveReplay {
     // Update fractional path progress for kill-point tracking.
     enemy.pathProgress += (enemy.speed * dt) / TOTAL_PATH_LENGTH;
 
-    // Killed enemy with depleted HP — die at kill point.
-    if (enemy.killed && enemy.hp <= 0) {
-      this._killEnemy(enemy);
-      return;
+    // Killed enemy: die when HP drained OR force-kill when reaching computed kill point.
+    // The force-kill handles cases where continuous fire rate underestimates discrete shots.
+    if (enemy.killed) {
+      if (enemy.hp <= 0 || enemy.pathProgress >= enemy.killProgress) {
+        this._killEnemy(enemy);
+        return;
+      }
     }
 
     // Waypoint movement.
@@ -345,20 +506,37 @@ export class WaveReplay {
       });
       tower.attackFlash = 0.18;
 
-      // Only deal real damage to enemies marked as killed on-chain.
-      // Survivors are visually immune — they march through.
-      if (target.killed) {
+      // Deal damage to all enemies in range.
+      // Killed enemies: full damage until HP reaches 0.
+      // Survivors: show partial damage up to their precomputed maxVisualDamage (capped at hp-1).
+      {
         const levelMult   = getTowerLevelMultiplier(tower.level);
         const synergyMult = this._hasSynergyNeighbor(tower) ? 1.2 : 1.0;
         const damage = Math.round(tDef.damage * tier.dmgMultiplier * levelMult * synergyMult);
-        target.hp      -= damage;
-        target.hitFlash = 0.1;
 
-        this.floatingTexts.push({
-          id: uid(), x: target.x, y: target.y - 0.5,
-          text: `-${damage}`, color: '#EF5350',
-          age: 0, maxAge: 0.65,
-        });
+        if (target.killed) {
+          target.hp        -= damage;
+          target.damageTaken += damage;
+          target.hitFlash   = 0.1;
+          this.floatingTexts.push({
+            id: uid(), x: target.x, y: target.y - 0.5,
+            text: `-${damage}`, color: '#EF5350',
+            age: 0, maxAge: 0.65,
+          });
+        } else if (target.damageTaken < target.maxVisualDamage) {
+          // Survivor: show how much fire the contract actually dealt, but cap at hp-1
+          const visualDmg    = Math.min(damage, target.maxVisualDamage - target.damageTaken);
+          target.hp          = Math.max(1, target.hp - visualDmg);
+          target.damageTaken += visualDmg;
+          target.hitFlash    = 0.08;
+          if (visualDmg > 0) {
+            this.floatingTexts.push({
+              id: uid(), x: target.x, y: target.y - 0.5,
+              text: `-${visualDmg}`, color: '#FF8A65',
+              age: 0, maxAge: 0.5,
+            });
+          }
+        }
       }
     }
   }

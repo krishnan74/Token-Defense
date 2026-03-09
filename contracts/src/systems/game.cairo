@@ -10,6 +10,7 @@
 #[starknet::interface]
 pub trait IGameSystem<T> {
     fn new_game(ref self: T, token_id: felt252, difficulty: u32);
+    fn quit_game(ref self: T, token_id: felt252);
     fn activate_overclock(ref self: T, token_id: felt252);
     /// Re-registers EGS metadata after contract upgrades (dojo_init is not re-run).
     fn initialize_egs(ref self: T);
@@ -460,6 +461,21 @@ pub mod game_system {
                 active_tower_count: 0,
             };
             world.write_model(@game_state);
+            self.minigame.post_action(token_id);
+        }
+
+        fn quit_game(ref self: ContractState, token_id: felt252) {
+            self.minigame.pre_action(token_id);
+
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            let mut game: GameState = world.read_model(token_id);
+            assert(game.player == caller, 'Not your session');
+            assert(!game.game_over, 'Game already over');
+            assert(!game.victory, 'Game already won');
+
+            game.game_over = true;
+            world.write_model(@game);
             self.minigame.post_action(token_id);
         }
 

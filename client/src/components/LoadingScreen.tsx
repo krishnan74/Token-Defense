@@ -18,22 +18,31 @@ const TIPS = [
   'The path is fixed — build your defense around the chokepoints, not the open tiles.',
 ];
 
-export default function LoadingScreen() {
+interface LoadingScreenProps {
+  mode?: 'deploy' | 'resume';
+}
+
+export default function LoadingScreen({ mode = 'deploy' }: LoadingScreenProps) {
   const tip = useMemo(() => TIPS[Math.floor(Math.random() * TIPS.length)], []);
 
   return (
-    <div className="menu-root">
+    <div className="menu-loader-root">
       <div className="menu-loader-card">
         <div className="menu-loader-spinner" />
-        <div className="menu-loader-title">DEPLOYING GAME</div>
-        <div className="menu-loader-sub">Waiting for chain confirmation...</div>
+        <div className="menu-loader-title">
+          {mode === 'resume' ? 'RESUMING SESSION' : 'DEPLOYING GAME'}
+        </div>
+        <div className="menu-loader-sub">
+          {mode === 'resume' ? 'Loading your session...' : 'Waiting for chain confirmation...'}
+        </div>
         <div className="menu-loader-dots">
           <span>▮</span><span>▮</span><span>▮</span>
         </div>
-        <div className="menu-loader-tip">
-          <span className="menu-loader-tip-label">TIP</span>
-          {tip}
-        </div>
+      </div>
+
+      <div className="menu-loader-tip-footer">
+        <span className="menu-loader-tip-label">TIP</span>
+        {tip}
       </div>
     </div>
   );

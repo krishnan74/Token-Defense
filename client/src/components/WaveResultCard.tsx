@@ -1,5 +1,11 @@
-import { WAVE_COMPOSITIONS } from '../constants';
+import { TOWERS, TOKEN_NAMES, WAVE_COMPOSITIONS } from '../constants';
 import type { WaveResultSummary, GameStats } from '../types';
+
+const TOKEN_COLOR: Record<string, string> = {
+  input_tokens: '#63B3ED',
+  image_tokens: '#68D391',
+  code_tokens:  '#FC8181',
+};
 
 function KillBreakdown({ result }: { result: WaveResultSummary }) {
   const composition = WAVE_COMPOSITIONS[result.waveNumber] ?? [];
@@ -27,13 +33,51 @@ function KillBreakdown({ result }: { result: WaveResultSummary }) {
   );
 }
 
+function TowerDamageList({ towers }: { towers: unknown[] }) {
+  const damaged = (towers as Array<{
+    tower_id: string | number;
+    tower_type: number;
+    health: number;
+    max_health: number;
+    is_alive?: boolean;
+  }>).filter((t) => t.is_alive !== false && Number(t.health) < Number(t.max_health));
+
+  if (!damaged.length) return null;
+
+  return (
+    <div className="app-kill-breakdown" style={{ marginTop: 6 }}>
+      <div style={{ fontFamily: "'VT323', monospace", color: '#D9534F', fontSize: 15, letterSpacing: 1, marginBottom: 4 }}>
+        TOWERS DAMAGED ({damaged.length})
+      </div>
+      {damaged.map((t) => {
+        const def = TOWERS[Number(t.tower_type)];
+        const hp = Number(t.health);
+        const maxHp = Number(t.max_health);
+        const pct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+        const tokenKey = TOKEN_NAMES[def?.tokenType ?? 0];
+        const tokColor = TOKEN_COLOR[tokenKey] ?? '#F5E6C8';
+        const hpColor = pct > 55 ? '#5CB85C' : pct > 22 ? '#F0AD4E' : '#D9534F';
+        return (
+          <div key={String(t.tower_id)} className="app-kill-row">
+            <span className="app-kill-label" style={{ color: tokColor }}>{def?.name ?? '?'} #{String(t.tower_id)}</span>
+            <span style={{ fontFamily: "'VT323', monospace", color: hpColor, fontSize: 15 }}>
+              {hp}/{maxHp} HP
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface WaveResultCardProps {
   result: WaveResultSummary;
   gameStats: GameStats;
+  towers?: unknown[];
   onDismiss: () => void;
 }
 
-export default function WaveResultCard({ result, gameStats, onDismiss }: WaveResultCardProps) {
+export default function WaveResultCard({ result, gameStats, towers, onDismiss }: WaveResultCardProps) {
   return (
     <div className="app-result-overlay">
       <div className="app-result-card">
@@ -57,6 +101,7 @@ export default function WaveResultCard({ result, gameStats, onDismiss }: WaveRes
           </b>
         </div>
         <KillBreakdown result={result} />
+        {towers && <TowerDamageList towers={towers} />}
         <div className="app-result-divider" />
         <div className="app-result-stats">
           <span>Run totals — Kills: {gameStats.totalKills} | Gold: {gameStats.totalGoldEarned}</span>
