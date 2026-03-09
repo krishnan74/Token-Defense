@@ -255,3 +255,7 @@ pnpm run dev      # HTTPS dev server on localhost (requires Chrome for Cartridge
 pnpm run build    # Production build
 pnpm run format   # Prettier
 ```
+
+### Audio & SFX Credits:
+- [Minifantasy Audio Pack](https://leohpaz.itch.io/minifantasy-dungeon-sfx-pack)
+- [400 Sounds Pack](https://ci.itch.io/400-sounds-pack)
