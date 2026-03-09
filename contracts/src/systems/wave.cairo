@@ -65,7 +65,7 @@ pub mod wave_system {
             assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(!game.victory, 'Already won');
-            assert(game.wave_number < MAX_WAVES, 'Max waves reached');
+            assert(game.endless_mode || game.wave_number < MAX_WAVES, 'Max waves reached');
 
             let (enemy_outcomes, kill_gold, base_damage, ic, imc, cc) =
                 resolve_wave(ref world, ref game, token_id);
@@ -256,7 +256,10 @@ pub mod wave_system {
         game.overclock_used = false;
 
         if game.base_health == 0 { game.game_over = true; }
-        if !game.game_over && game.wave_number >= MAX_WAVES { game.victory = true; }
+        // In endless mode, never set victory — waves continue indefinitely.
+        if !game.game_over && !game.endless_mode && game.wave_number >= MAX_WAVES {
+            game.victory = true;
+        }
 
         (enemy_outcomes, kill_gold, base_damage, input_consumed, image_consumed, code_consumed)
     }

@@ -34,7 +34,7 @@
   "contracts": [
     {
       "address": "0x2194878721f2ed30e4a5eebcbfa5fc1bcefd6ddb66d8eb319ef94ef5d72ea18",
-      "class_hash": "0x5b60720f32d4c340fcabc292796dda9d2369b3b7b25dc825608b36a6abef14b",
+      "class_hash": "0x45a465fbf227b63d900230e244946d9d582ec2000731e749e40a3d149faac23",
       "init_calldata": [],
       "tag": "td-building_system",
       "selector": "0x1dc9fd5061f947194027cc1d616788c6d3fb9a87b7a683d1da6fd0929f89305",
@@ -51,7 +51,7 @@
     },
     {
       "address": "0x6861bcd95eca8d269191997803114cc3efa298c2c277a3ed1f75ffdbfed34c1",
-      "class_hash": "0x5e155eb8a1c67e6e2d68a78e7ea10d00e4730beda7c40678e20a391cf0732bc",
+      "class_hash": "0x557a9d50d6cb4f82453843f7f9dac8f9ad78aa93519345094e4fb66a7410a27",
       "init_calldata": [],
       "tag": "td-game_system",
       "selector": "0x5181ca5c2a3ffae64a9316e77191f5182d81882d1589dbccff129ca3c48247c",
@@ -60,13 +60,14 @@
         "new_game",
         "quit_game",
         "activate_overclock",
+        "activate_endless",
         "initialize_egs",
         "upgrade"
       ]
     },
     {
       "address": "0x719db1b998b8992871ed9019fabe798fc763c83eb9a14c231938779e52f8e50",
-      "class_hash": "0x60d1d8c04754cf6060fc76743e86d93a33e22714e3eea477aea89d821b231f3",
+      "class_hash": "0x3ce5a1c7ad68f7cc92b1e32201d79f521ec670f60c7825a30534ce9bd32c415",
       "init_calldata": [],
       "tag": "td-wave_system",
       "selector": "0x518ab3d320fb24ae95e1805f87cd6d1647c0e625e3f79df2d74c9cd1ffee7d3",
@@ -196,9 +197,14 @@
           "name": "active_tower_count",
           "type": "core::integer::u32",
           "key": false
+        },
+        {
+          "name": "endless_mode",
+          "type": "core::bool",
+          "key": false
         }
       ],
-      "class_hash": "0x7c87dbc0914279b14593b0b884a30fc226f9b04de468b749b36f97ce88eaf50",
+      "class_hash": "0x3ef868d4aa2636a5b83f30cef5a9d56a7a0997182284d1a5f2558d556b42aa8",
       "tag": "td-GameState",
       "selector": "0x704f790bf4db3b2cafb9ac377c32b9a25a92787a526b6cea62d7d1a4f37738b"
     },
@@ -2953,6 +2959,10 @@
         {
           "name": "active_tower_count",
           "type": "core::integer::u32"
+        },
+        {
+          "name": "endless_mode",
+          "type": "core::bool"
         }
       ]
     },
@@ -3015,6 +3025,10 @@
         {
           "name": "active_tower_count",
           "type": "core::integer::u32"
+        },
+        {
+          "name": "endless_mode",
+          "type": "core::bool"
         }
       ]
     },
@@ -3298,6 +3312,18 @@
         {
           "type": "function",
           "name": "activate_overclock",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "activate_endless",
           "inputs": [
             {
               "name": "token_id",

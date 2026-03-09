@@ -577,6 +577,27 @@ export default function GameBoard({
               );
             })()}
 
+            {/* Range ring on hover over a placed tower (no build selected) */}
+            {hoveredCell && !selectedBuild && !isWaveActive && (() => {
+              const ht = liveTowers.find((t) =>
+                t.is_alive !== false && Number(t.x) === hoveredCell.col && Number(t.y) === hoveredCell.row,
+              );
+              if (!ht) return null;
+              const isVision = Number(ht.tower_type) === 1;
+              const rangeRadius = isVision ? Math.sqrt(VISION_RANGE_SQ) * CELL : TOWER_RANGE * CELL;
+              return (
+                <circle
+                  cx={(hoveredCell.col + 0.5) * CELL}
+                  cy={(hoveredCell.row + 0.5) * CELL}
+                  r={rangeRadius}
+                  fill="rgba(255,255,255,0.04)"
+                  stroke="rgba(255,255,255,0.4)"
+                  strokeWidth={2}
+                  strokeDasharray="8,5"
+                />
+              );
+            })()}
+
             {/* Projectiles */}
             {liveSnapshot?.projectiles?.map((p) => {
               const x1 = p.fromX * CELL, y1 = p.fromY * CELL;

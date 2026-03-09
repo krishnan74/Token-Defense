@@ -34,12 +34,12 @@ A fully on-chain tower defense game built on StarkNet using the [Dojo](https://b
 token-defense/
 ├── contracts/          Cairo smart contracts (Dojo 1.8.0)
 │   ├── src/
-│   │   ├── models.cairo          GameState, Tower, Factory
+│   │   ├── models.cairo          GameState (incl. endless_mode), Tower, Factory
 │   │   ├── constants.cairo       All game constants + combat helpers
 │   │   └── systems/
-│   │       ├── game.cairo        new_game, activate_overclock, EGS interfaces
-│   │       ├── building.cairo    place/sell/upgrade towers + factories
-│   │       └── wave.cairo        start_wave — full on-chain simulation
+│   │       ├── game.cairo        new_game, activate_overclock, activate_endless, EGS interfaces
+│   │       ├── building.cairo    place/sell/upgrade towers + factories (level cap, fair refunds)
+│   │       └── wave.cairo        start_wave — full on-chain simulation, endless bypass
 │   └── tests/
 │       └── test_world.cairo      37 integration tests
 ├── client/             React + Vite + TypeScript frontend

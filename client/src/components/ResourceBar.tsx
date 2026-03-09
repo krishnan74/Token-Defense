@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getTokenTier, MAX_TOKEN_BALANCE } from '../constants';
+import { FACTORIES, getTokenTier, MAX_TOKEN_BALANCE } from '../constants';
 
 interface GameStateDisplay {
   gold: number;
@@ -11,8 +11,8 @@ interface GameStateDisplay {
 }
 
 function TokenDisplay({
-  icon, label, value, color,
-}: { icon: string; label: string; value: number; color: string }) {
+  icon, label, value, color, forecast,
+}: { icon: string; label: string; value: number; color: string; forecast?: number }) {
   const pct     = value / MAX_TOKEN_BALANCE;
   const atCap   = value >= MAX_TOKEN_BALANCE;
   const nearCap = pct >= 0.85;
@@ -30,6 +30,9 @@ function TokenDisplay({
             {tier.label}
           </span>
       }
+      {forecast !== undefined && forecast > 0 && (
+        <span style={styles.forecast}>+{forecast}</span>
+      )}
     </div>
   );
 }
@@ -39,10 +42,28 @@ function shorten(id: string) {
   return id.slice(0, 6) + '…' + id.slice(-4);
 }
 
-export default function ResourceBar({ gameState, tokenId }: { gameState: GameStateDisplay | null; tokenId?: string | null }) {
+export default function ResourceBar({
+  gameState, tokenId, factories,
+}: {
+  gameState: GameStateDisplay | null;
+  tokenId?: string | null;
+  factories?: Array<{ factory_type: number | string; level: number | string; is_active?: boolean }>;
+}) {
   const [copied, setCopied] = useState(false);
   if (!gameState) return null;
   const { gold, input_tokens, image_tokens, code_tokens } = gameState;
+
+  // Compute expected token production for the next wave from active factories
+  const activeFactories = factories?.filter((f) => f.is_active !== false) ?? [];
+  const calcProd = (typeIdx: number) => activeFactories
+    .filter((f) => Number(f.factory_type) === typeIdx)
+    .reduce((sum, f) => {
+      const lv = Number(f.level) || 1;
+      return sum + Math.floor((FACTORIES[typeIdx]?.baseOutput ?? 0) * (1 + 0.5 * (lv - 1)));
+    }, 0);
+  const inputForecast = calcProd(0);
+  const imageForecast = calcProd(1);
+  const codeForecast  = calcProd(2);
 
   function handleCopy() {
     if (!tokenId) return;
@@ -63,10 +84,10 @@ export default function ResourceBar({ gameState, tokenId }: { gameState: GameSta
 
       <div style={styles.divider} />
 
-      {/* Tokens with cap indicator */}
-      <TokenDisplay icon="▲" label="INPUT" value={input_tokens ?? 0} color="#63B3ED" />
-      <TokenDisplay icon="■" label="IMAGE" value={image_tokens ?? 0} color="#68D391" />
-      <TokenDisplay icon="●" label="CODE"  value={code_tokens  ?? 0} color="#FC8181" />
+      {/* Tokens with cap indicator and production forecast */}
+      <TokenDisplay icon="▲" label="INPUT" value={input_tokens ?? 0} color="#63B3ED" forecast={inputForecast} />
+      <TokenDisplay icon="■" label="IMAGE" value={image_tokens ?? 0} color="#68D391" forecast={imageForecast} />
+      <TokenDisplay icon="●" label="CODE"  value={code_tokens  ?? 0} color="#FC8181" forecast={codeForecast} />
 
       {/* Token ID */}
       {tokenId && (
@@ -120,6 +141,10 @@ const styles = {
   tierBadge: {
     fontFamily: "'VT323', monospace", fontSize: 11,
     padding: '0 4px', letterSpacing: 0.5, marginLeft: 2,
+  },
+  forecast: {
+    fontFamily: "'VT323', monospace", fontSize: 12,
+    color: '#5CB85C', marginLeft: 3, letterSpacing: 0.5,
   },
   tokenIdBlock: {
     display: 'flex', alignItems: 'center', gap: 5,

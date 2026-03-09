@@ -61,6 +61,7 @@ export default function App({ account, manifest }: AppProps) {
   const [conveyors,         setConveyors]         = useState<Conveyor[]>([]);
   const [showTour,          setShowTour]          = useState(false);
   const [highlightedEntityId, setHighlightedEntityId] = useState<string | null>(null);
+  const [endlessPending,    setEndlessPending]    = useState(false);
   const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
   const [resumeError,       setResumeError]       = useState<string | null>(null);
   const [isResuming,        setIsResuming]        = useState(false);
@@ -411,6 +412,40 @@ export default function App({ account, manifest }: AppProps) {
     });
   }
 
+  function handleRepairAll(towerIds: (number | string)[]) {
+    if (!towerIds.length) return;
+    const cost = towerIds.length * TOWER_REPAIR_COST;
+    sfx.playClick();
+    setOptimisticGoldSpent((prev) => prev + cost);
+    setRepairedTowerIds((prev) => new Set([...prev, ...towerIds.map(String)]));
+    actions.repairAllTowers(towerIds).then(() => {
+      setRepairedTowerIds((prev) => {
+        const next = new Set(prev);
+        towerIds.forEach((id) => next.delete(String(id)));
+        return next;
+      });
+    }).catch((e: unknown) => {
+      console.error('repairAllTowers failed:', e);
+      setOptimisticGoldSpent((prev) => Math.max(0, prev - cost));
+      setRepairedTowerIds((prev) => {
+        const next = new Set(prev);
+        towerIds.forEach((id) => next.delete(String(id)));
+        return next;
+      });
+    });
+  }
+
+  function handleActivateEndless() {
+    setEndlessPending(true);
+    actions.activateEndless().then(() => {
+      setEndlessPending(false);
+      setGameOver(null);
+    }).catch((e: unknown) => {
+      console.error('activateEndless failed:', e);
+      setEndlessPending(false);
+    });
+  }
+
   async function handleCellClick(col: number, row: number) {
     if (!selectedBuild || !gameState || isBusy) return;
     if (col === BASE_X && row === BASE_Y) return;
@@ -536,7 +571,7 @@ export default function App({ account, manifest }: AppProps) {
 
   return (
     <div className="app-root">
-      <ResourceBar gameState={displayGameState} tokenId={tokenId} />
+      <ResourceBar gameState={displayGameState} tokenId={tokenId} factories={allFactories as never} />
       <WavePanel
         gameState={displayGameState}
         isWaveActive={isBusy}
@@ -568,6 +603,7 @@ export default function App({ account, manifest }: AppProps) {
           onSellTower={handleSellTower}
           onSellFactory={handleSellFactory}
           onRepairTower={handleRepairTower}
+          onRepairAll={handleRepairAll}
           highlightedEntityId={highlightedEntityId}
           onHighlight={setHighlightedEntityId}
         />
@@ -623,6 +659,8 @@ export default function App({ account, manifest }: AppProps) {
             clientBaseHealthInitRef.current = false;
             handleNewGame(gameState?.difficulty ?? selectedDifficulty);
           }}
+          onEndless={gameOver.victory && !gameState?.endless_mode ? handleActivateEndless : undefined}
+          endlessPending={endlessPending}
         />
       )}
 

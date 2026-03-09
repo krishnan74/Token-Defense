@@ -9,26 +9,22 @@ const TOKEN_COLOR: Record<string, string> = {
 
 function KillBreakdown({ result }: { result: WaveResultSummary }) {
   const composition = WAVE_COMPOSITIONS[result.waveNumber] ?? [];
-  const rows: { label: string; killed: boolean }[] = [];
-  if (composition.some((g) => g.type === 'TextJailbreak'))
-    rows.push({ label: 'TextJailbreak',   killed: result.killedTJ });
-  if (composition.some((g) => g.type === 'ContextOverflow'))
-    rows.push({ label: 'ContextOverflow', killed: result.killedCO });
-  if (composition.some((g) => g.type === 'HalluSwarm'))
-    rows.push({ label: 'HalluSwarm',      killed: result.killedHS });
-  if (composition.some((g) => g.type === 'Boss'))
-    rows.push({ label: 'BOSS',            killed: result.killedBoss });
-  if (!rows.length) return null;
+  if (!composition.length) return null;
   return (
     <div className="app-kill-breakdown">
-      {rows.map(({ label, killed }) => (
-        <div key={label} className="app-kill-row">
-          <span className="app-kill-label">{label}</span>
-          <span className={`app-kill-status ${killed ? 'app-kill-status--dead' : 'app-kill-status--alive'}`}>
-            {killed ? 'ELIMINATED' : 'SURVIVED'}
-          </span>
-        </div>
-      ))}
+      {composition.map(({ type, count }) => {
+        const kills = result.groupKills?.[type] ?? { killed: 0, total: count };
+        const allKilled = kills.killed === kills.total;
+        const displayLabel = type === 'Boss' ? 'BOSS' : type;
+        return (
+          <div key={type} className="app-kill-row">
+            <span className="app-kill-label">{displayLabel}</span>
+            <span className={`app-kill-status ${allKilled ? 'app-kill-status--dead' : 'app-kill-status--alive'}`}>
+              {kills.killed}/{kills.total} {allKilled ? 'ELIM' : 'SURV'}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

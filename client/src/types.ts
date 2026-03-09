@@ -12,6 +12,7 @@ export interface WaveResultSummary {
   killedHS: boolean;
   killedBoss: boolean;
   killCount: number;
+  groupKills: Record<string, { killed: number; total: number }>;
 }
 
 export interface GameOver {
