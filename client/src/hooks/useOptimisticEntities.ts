@@ -16,6 +16,8 @@ export function useOptimisticEntities(
   const [optimisticFactories, setOptimisticFactories] = useState<unknown[]>([]);
   const [optimisticGoldSpent, setOptimisticGoldSpent] = useState(0);
   const [upgradeOptimistic,   setUpgradeOptimistic]   = useState<UpgradeOptimistic>({ counts: {}, gold: 0 });
+  // Set of tower_ids that have been optimistically repaired (show max_health until confirmed)
+  const [repairedTowerIds,    setRepairedTowerIds]    = useState<Set<string>>(new Set());
 
   // Clear optimistic towers once Torii confirms them
   useEffect(() => {
@@ -90,7 +92,13 @@ export function useOptimisticEntities(
   const currentTowers    = towers.filter(   (t) => Number((t as { tower_id:   number }).tower_id)   < maxTowerId);
   const currentFactories = factories.filter((f) => Number((f as { factory_id: number }).factory_id) < maxFactoryId);
 
-  const allTowers = [...currentTowers, ...optimisticTowers];
+  const allTowers = [...currentTowers, ...optimisticTowers].map((t) => {
+    const typed = t as { tower_id: string | number; health: number; max_health: number };
+    if (repairedTowerIds.has(String(typed.tower_id))) {
+      return { ...typed, health: typed.max_health };
+    }
+    return typed;
+  });
   const allFactories = [...currentFactories, ...optimisticFactories].map((f) => {
     const typed = f as { factory_id: string | number; level: number };
     return { ...typed, level: Number(typed.level) + (upgradeOptimistic.counts[String(typed.factory_id)] ?? 0) };
@@ -105,5 +113,6 @@ export function useOptimisticEntities(
     setOptimisticFactories,
     setOptimisticGoldSpent,
     setUpgradeOptimistic,
+    setRepairedTowerIds,
   };
 }

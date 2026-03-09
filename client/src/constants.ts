@@ -67,6 +67,22 @@ export const MAX_TOKEN_BALANCE = 150;
 /** Gold cost to activate Overclock for one wave. */
 export const OVERCLOCK_COST = 50;
 
+/** Gold cost to fully repair a tower's HP. */
+export const TOWER_REPAIR_COST = 30;
+
+/**
+ * Tower damage output multiplier based on HP ratio — mirrors tower_health_mult_x100.
+ * Returns a value in [0,1].
+ */
+export function getTowerHealthMult(health: number, maxHealth: number): number {
+  if (maxHealth === 0) return 1.0;
+  const pct = health / maxHealth;
+  if (pct >= 0.75) return 1.00;
+  if (pct >= 0.50) return 0.90;
+  if (pct >= 0.25) return 0.75;
+  return 0.55;
+}
+
 export interface TokenTier {
   minRatio: number;
   dmgMultiplier: number;

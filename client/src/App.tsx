@@ -15,7 +15,7 @@ import WavePanel from './components/WavePanel';
 import WaveResultCard from './components/WaveResultCard';
 import {
   BASE_MAX_HP, BASE_X, BASE_Y,
-  CONVEYOR_COLORS, FACTORIES, OVERCLOCK_COST, TOWERS, TOWER_UPGRADE_COST,
+  CONVEYOR_COLORS, FACTORIES, OVERCLOCK_COST, TOWER_REPAIR_COST, TOWERS, TOWER_UPGRADE_COST,
   computeConveyorTiles, getDifficultyBaseHp, isPathTile,
 } from './constants';
 import type { ConveyorTile } from './constants';
@@ -77,6 +77,7 @@ export default function App({ account, manifest }: AppProps) {
 
   const { allTowers, allFactories, optimisticGoldSpent, upgradeOptimistic,
     setOptimisticTowers, setOptimisticFactories, setOptimisticGoldSpent, setUpgradeOptimistic,
+    setRepairedTowerIds,
   } = useOptimisticEntities(towers as never, factories as never, gameState);
 
   const displayGold = Math.max(0,
@@ -284,6 +285,20 @@ export default function App({ account, manifest }: AppProps) {
     });
   }
 
+  function handleRepairTower(id: number | string) {
+    sfx.playClick();
+    setOptimisticGoldSpent((prev) => prev + TOWER_REPAIR_COST);
+    setRepairedTowerIds((prev) => new Set([...prev, String(id)]));
+    actions.repairTower(id as number).then(() => {
+      // Torii will confirm with real health; clear optimistic flag
+      setRepairedTowerIds((prev) => { const next = new Set(prev); next.delete(String(id)); return next; });
+    }).catch((e: unknown) => {
+      console.error('repairTower failed:', e);
+      setOptimisticGoldSpent((prev) => Math.max(0, prev - TOWER_REPAIR_COST));
+      setRepairedTowerIds((prev) => { const next = new Set(prev); next.delete(String(id)); return next; });
+    });
+  }
+
   function handleActivateOverclock() {
     if (overclockPending || gameState?.overclock_used) return;
     sfx.playOverclock();
@@ -445,6 +460,7 @@ export default function App({ account, manifest }: AppProps) {
           onUpgradeTower={handleUpgradeTower}
           onSellTower={handleSellTower}
           onSellFactory={handleSellFactory}
+          onRepairTower={handleRepairTower}
           highlightedEntityId={highlightedEntityId}
           onHighlight={setHighlightedEntityId}
         />

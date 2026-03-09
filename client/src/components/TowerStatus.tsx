@@ -1,4 +1,4 @@
-import { BASE_MAX_HP, FACTORIES, MAX_TOWERS, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp } from '../constants';
+import { BASE_MAX_HP, FACTORIES, MAX_TOWERS, TOWER_REPAIR_COST, TOWERS, TOWER_UPGRADE_COST, getDifficultyBaseHp, getTowerHealthMult } from '../constants';
 import type { Factory, Tower } from '../dojo/models';
 
 interface TowerStatusProps {
@@ -9,11 +9,12 @@ interface TowerStatusProps {
   onUpgradeTower: (towerId: number | string) => void;
   onSellTower: (towerId: number | string) => void;
   onSellFactory: (factoryId: number | string) => void;
+  onRepairTower: (towerId: number | string) => void;
   highlightedEntityId?: string | null;
   onHighlight?: (id: string | null) => void;
 }
 
-export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, gameState, highlightedEntityId, onHighlight }: TowerStatusProps) {
+export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, onRepairTower, gameState, highlightedEntityId, onHighlight }: TowerStatusProps) {
   const aliveTowerCount = (towers as Array<{ is_alive?: boolean }>).filter((t) => t.is_alive !== false).length;
   const maxHp     = getDifficultyBaseHp(gameState?.difficulty ?? 1);
   const baseHealth = gameState?.base_health ?? maxHp;
@@ -52,9 +53,16 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
         const level = Number(t.level) || 1;
         const fillColor = pct > 55 ? '#5CB85C' : pct > 22 ? '#F0AD4E' : '#D9534F';
         const upgCost   = TOWER_UPGRADE_COST[level];
+        const hpMult    = getTowerHealthMult(hp, maxHp);
+        const needsRepair = alive && hp < maxHp;
+        const canRepair  = needsRepair && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= TOWER_REPAIR_COST;
         const canUpgradeTower = alive && level < 3 && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= (upgCost ?? 9999);
         const idStr = String(t.tower_id);
         const isHighlighted = highlightedEntityId === `tower-${idStr}`;
+
+        // Performance warning color
+        const perfColor = hpMult >= 1.0 ? '#5CB85C' : hpMult >= 0.90 ? '#F0AD4E' : hpMult >= 0.75 ? '#FF8C00' : '#D9534F';
+
         return (
           <div
             key={idStr}
@@ -69,7 +77,7 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
           >
             <div style={styles.cardRow}>
               <span style={styles.cardName}>{def?.name}</span>
-              <div style={{ display: 'flex', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <span style={{ ...styles.badge, background: '#4A5A8A', color: '#B8C8FF' }}>Lv{level}</span>
                 <span style={styles.idTag}>#{String(t.tower_id)}</span>
               </div>
@@ -77,8 +85,15 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
             <div style={styles.hpTrack}>
               <div style={{ ...styles.hpFill, width: `${pct}%`, background: fillColor }} />
             </div>
-            <div style={styles.sub}>{hp}/{maxHp} HP</div>
-            <div style={{ display: 'flex', gap: 4, marginTop: alive ? 0 : 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={styles.sub}>{hp}/{maxHp} HP</span>
+              {alive && hpMult < 1.0 && (
+                <span style={{ ...styles.sub, color: perfColor, fontSize: 13 }}>
+                  {Math.round(hpMult * 100)}% PWR
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 4, marginTop: alive ? 2 : 4, flexWrap: 'wrap' as const }}>
               {alive && level < 3 && (
                 <button
                   style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgradeTower ? 1 : 0.4 }}
@@ -88,9 +103,19 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
                   ↑ ({upgCost}g)
                 </button>
               )}
+              {alive && needsRepair && !gameState?.is_wave_active && (
+                <button
+                  style={{ ...styles.repairBtn, opacity: canRepair ? 1 : 0.4 }}
+                  disabled={!canRepair}
+                  onClick={(e) => { e.stopPropagation(); onRepairTower(t.tower_id); }}
+                  title={`Repair tower to full HP (${TOWER_REPAIR_COST}g)`}
+                >
+                  🔧{TOWER_REPAIR_COST}g
+                </button>
+              )}
               {alive && !gameState?.is_wave_active && (
                 <button
-                  style={{ ...styles.sellBtn, flex: level < 3 ? '0 0 auto' : 1 }}
+                  style={{ ...styles.sellBtn, flex: '0 0 auto' }}
                   onClick={(e) => { e.stopPropagation(); onSellTower(t.tower_id); }}
                   title="Remove tower (free)"
                 >
@@ -204,5 +229,15 @@ const styles = {
     fontFamily: "'VT323', monospace", fontSize: 14,
     boxShadow: '2px 2px 0 #1A0500',
     transition: 'background 0.1s',
+  },
+  repairBtn: {
+    marginTop: 5, padding: '3px 6px',
+    background: '#1A3A10', color: '#80FF80',
+    border: '2px solid #2A6A1A',
+    borderRadius: 0, cursor: 'pointer',
+    fontFamily: "'VT323', monospace", fontSize: 13,
+    boxShadow: '2px 2px 0 #0A1500',
+    transition: 'background 0.1s',
+    flex: '0 0 auto',
   },
 };

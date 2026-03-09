@@ -42,6 +42,7 @@ const controllerOpts = {
             { name: 'Upgrade Tower',   entrypoint: 'upgrade_tower',   description: 'Upgrade a tower level' },
             { name: 'Sell Tower',      entrypoint: 'sell_tower',      description: 'Remove a tower from the grid' },
             { name: 'Sell Factory',    entrypoint: 'sell_factory',    description: 'Remove a factory and refund 50% cost' },
+            { name: 'Repair Tower',    entrypoint: 'repair_tower',    description: 'Restore a damaged tower to full HP (30g)' },
           ],
         },
       }),

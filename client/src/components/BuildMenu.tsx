@@ -81,6 +81,47 @@ function TierReference({ onClose }: { onClose: () => void }) {
           </tbody>
         </table>
 
+        {/* Tower health section */}
+        <div style={ref.section}>TOWER HEALTH &amp; REPAIR</div>
+        <div style={ref.explain}>
+          Enemies that survive deal HP damage to every tower in their range. Damaged towers deal reduced damage.
+          Use the <span style={{ color: '#80FF80' }}>🔧 Repair</span> button in the sidebar (30g) to restore a tower to full HP between waves.
+        </div>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' as const, marginBottom: 6 }}>
+          <table style={ref.table}>
+            <thead>
+              <tr>
+                <th style={ref.th}>Tower HP %</th>
+                <th style={ref.th}>Damage output</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[['≥75%', '100% (full)', '#5CB85C'], ['≥50%', '90%', '#F0AD4E'], ['≥25%', '75%', '#FF8C00'], ['<25%', '55%', '#D9534F']].map(([hp, dmg, color]) => (
+                <tr key={hp}>
+                  <td style={{ ...ref.td, color: color as string }}>{hp}</td>
+                  <td style={{ ...ref.td, color: color as string }}>{dmg}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <table style={ref.table}>
+            <thead>
+              <tr>
+                <th style={ref.th}>Enemy type</th>
+                <th style={ref.th}>Tower dmg/pass</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[['TextJailbreak', '1 HP'], ['ContextOverflow', '1 HP'], ['HalluSwarm', '0 HP'], ['Boss ☠', '3 HP']].map(([name, dmg]) => (
+                <tr key={name}>
+                  <td style={ref.td}>{name}</td>
+                  <td style={{ ...ref.td, color: '#FC8181' }}>{dmg}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <div style={ref.columns}>
           {/* Tower stats table */}
           <div style={{ flex: 1 }}>

@@ -49,7 +49,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'TOWER SIDEBAR',
-    body: 'Track towers and factories here.\n◆ Click a card to highlight that tower/factory on the board.\n◆ Upgrade towers (↑) to boost damage up to +65%.\n◆ Upgrade factories for +50% token output per level.\n◆ Sell (✕) to reposition.',
+    body: 'Track towers and factories here.\n◆ Click a card to highlight that tower/factory on the board.\n◆ Upgrade towers (↑) to boost damage up to +65%.\n◆ Upgrade factories for +50% token output per level.\n◆ Sell (✕) to reposition.\n\nTowers that enemies survive through take HP damage and show a PWR% badge. Use the 🔧 Repair button (30g) to restore them to full power between waves.',
     anchor: 'mid-right',
     arrow: 'right',
     dim: true,
@@ -63,7 +63,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'PRO TIPS',
-    body: '◆ Adjacent towers of DIFFERENT types share a +20% synergy bonus (gold glow).\n◆ Tokens are capped at 150 — overbuild factories early, not late.\n◆ Vision towers deal the most damage (14) but use rare IMAGE tokens — protect them.\n◆ Bosses appear on waves 5 and 10 — they are large, slow, and hit hard.',
+    body: '◆ Adjacent towers of DIFFERENT types share a +20% synergy bonus (gold glow).\n◆ Tokens are capped at 150 — overbuild factories early, not late.\n◆ Vision towers deal the most damage (14) but use rare IMAGE tokens — protect them.\n◆ Bosses appear on waves 5 and 10 — large, slow, and deal 3 HP damage to every tower they pass.\n◆ Watch the PWR% badge in the sidebar — a tower below 75% HP deals reduced damage. Repair (30g) before tough waves.',
     anchor: 'center',
     dim: true,
   },
