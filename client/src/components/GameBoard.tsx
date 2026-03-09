@@ -106,8 +106,8 @@ function hasSynergyNeighbor(tx: number, ty: number, ttype: number, allTowers: To
 function isCellOccupied(col: number, row: number, towers: unknown[], factories: unknown[]): boolean {
   if (col === BASE_X && row === BASE_Y) return true;
   return (
-    (towers    as Array<{ x: number; y: number }>).some((t) => Number(t.x) === col && Number(t.y) === row) ||
-    (factories as Array<{ x: number; y: number }>).some((f) => Number(f.x) === col && Number(f.y) === row)
+    (towers    as Array<{ x: number; y: number; is_alive?: boolean }>).some((t) => t.is_alive !== false && Number(t.x) === col && Number(t.y) === row) ||
+    (factories as Array<{ x: number; y: number; is_active?: boolean }>).some((f) => f.is_active !== false && Number(f.x) === col && Number(f.y) === row)
   );
 }
 
@@ -174,16 +174,18 @@ const FACTORY_CFG: Record<number, { color: string; dark: string; accent: string;
 };
 
 function FactorySprite({
-  factoryType, level, ghost,
+  factoryType, level, ghost, isActive,
 }: {
   factoryType: number | string;
   level: number;
   ghost?: boolean;
+  isActive?: boolean;
 }) {
   const cfg = FACTORY_CFG[Number(factoryType)] ?? FACTORY_CFG[0];
   const sz = CELL - 16;
+  const soldOpacity = isActive === false ? 0.25 : 1;
   return (
-    <div style={{ position: 'relative', width: sz, height: sz }}>
+    <div style={{ position: 'relative', width: sz, height: sz, opacity: soldOpacity }}>
       {/* Chimney */}
       <div style={{
         position: 'absolute', right: 8, top: -10,
@@ -622,11 +624,11 @@ export default function GameBoard({
           </div>
 
           {/* ── Factories ── */}
-          {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number }>).map((f) => {
+          {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number; is_active?: boolean }>).map((f) => {
             const fIsHighlighted = highlightedEntityId === `factory-${String(f.factory_id)}`;
             return (
               <div key={`f-${f.factory_id}`} style={{ position: 'absolute', left: Number(f.x) * CELL + 8, top: Number(f.y) * CELL + 10, zIndex: 2, pointerEvents: 'none' }}>
-                <FactorySprite factoryType={f.factory_type} level={Number(f.level)} />
+                <FactorySprite factoryType={f.factory_type} level={Number(f.level)} isActive={f.is_active} />
                 {fIsHighlighted && (
                   <div style={{
                     position: 'absolute', inset: -4,

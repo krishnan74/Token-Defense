@@ -8,6 +8,7 @@ interface BuildMenuProps {
   gameState: { gold: number; is_wave_active?: boolean } | null;
   isMuted: boolean;
   toggleMute: () => void;
+  onShowTour: () => void;
 }
 
 const TOWER_COLORS: Record<number, { bg: string; border: string; active: string }> = {
@@ -218,7 +219,7 @@ const ref = {
 };
 
 // ── Main component ──────────────────────────────────────────────────────────
-export default function BuildMenu({ selected, onSelect, gameState, isMuted, toggleMute }: BuildMenuProps) {
+export default function BuildMenu({ selected, onSelect, gameState, isMuted, toggleMute, onShowTour }: BuildMenuProps) {
   const [showRef, setShowRef] = useState(false);
   const gold     = gameState?.gold ?? 0;
   const disabled = !!gameState?.is_wave_active;
@@ -298,6 +299,11 @@ export default function BuildMenu({ selected, onSelect, gameState, isMuted, togg
             title={isMuted ? 'Unmute music' : 'Mute music'}
             onClick={toggleMute}
           >{isMuted ? '🔇' : '🔊'}</button>
+          <button
+            style={styles.iconBtn}
+            title="Replay guided tour"
+            onClick={onShowTour}
+          >TOUR</button>
           <button
             style={styles.iconBtn}
             title="Game reference: token tiers, tower & factory stats"

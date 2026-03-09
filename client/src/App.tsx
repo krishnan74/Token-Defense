@@ -471,6 +471,7 @@ export default function App({ account, manifest }: AppProps) {
         gameState={displayGameState}
         isMuted={isMuted}
         toggleMute={toggleMute}
+        onShowTour={() => setShowTour(true)}
       />
 
       {wave.countdown !== null && (
@@ -498,6 +499,7 @@ export default function App({ account, manifest }: AppProps) {
         <WaveResultCard
           result={waveResult}
           gameStats={gameStats}
+          towers={allTowers}
           onDismiss={() => setWaveResult(null)}
         />
       )}
