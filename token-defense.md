@@ -5,13 +5,14 @@
 **Token Defense** is a fully on-chain tower defense game built on StarkNet using the Dojo engine. Defend your AI base from waves of prompt injection attacks by placing towers and factories on a 12×8 grid.
 
 **Features:**
-- **3 tower types** — GPT (input tokens), Vision (image tokens), Code (code tokens) — up to 14 placed simultaneously; sell to free slots
-- **3 factory types** — each producing a matching token type to power towers
-- **10 waves** of escalating enemies: TextJailbreak, ContextOverflow, HalluSwarm, and Boss enemies on waves 5 & 10
+- **3 tower types** — GPT (input, range 3), Vision (image, range 2, AoE), Code (code, range 3, 1.5× vs HalluSwarm) — up to 14 placed simultaneously; sell to free slots
+- **3 factory types** — each producing a matching token type to power towers; upgradeable to L3
+- **10 waves** of escalating enemies: TextJailbreak, ContextOverflow (from wave 3), HalluSwarm, and Boss enemies on waves 5 & 10
 - **Per-enemy on-chain simulation** — wave resolution runs entirely in the contract using a sequential token-drain model; later enemies face weaker towers as tokens deplete
-- **Token economy** — towers consume tokens per shot; tier (Powered / Good / Low / Critical / Offline) determines fire rate and damage multiplier
+- **Token economy** — towers consume tokens per shot; tier (Powered / Good / Low / Critical / Offline) determines fire rate and damage multiplier; token cap 150 per type
 - **Tower HP degradation** — surviving enemies deal HP damage to towers in range; damaged towers deal reduced damage; repairable for 30g between waves
 - **Strategic mechanics** — tower synergy bonuses, factory upgrades, overclock ability, wave modifiers, per-enemy traits, difficulty tiers
+- **Endless mode** — after wave 10 victory, choose to continue into unlimited survival waves
 - **Session resume** — each session is a Denshokan EGS ERC721 token; resume from any device via token ID or shared URL
 - **Quit game** — forfeit a session on-chain at any time between waves
 - **Guided tour** — 8-step in-game tutorial for new players; replayable via TOUR button
