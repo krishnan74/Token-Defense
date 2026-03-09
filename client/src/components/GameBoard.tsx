@@ -345,11 +345,12 @@ interface GameBoardProps {
   isWaveActive: boolean;
   baseHealth: number;
   conveyors: Conveyor[];
+  gold?: number;
   highlightedEntityId?: string | null;
 }
 
 export default function GameBoard({
-  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth, conveyors, highlightedEntityId,
+  towers, factories, liveSnapshot, selectedBuild, onCellClick, isWaveActive, baseHealth, conveyors, gold, highlightedEntityId,
 }: GameBoardProps) {
   const [hoveredCell, setHoveredCell] = useState<{ col: number; row: number } | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -399,8 +400,11 @@ export default function GameBoard({
 
   const hoveredOccupied = hoveredCell
     && isCellOccupied(hoveredCell.col, hoveredCell.row, liveTowers, factories);
+  const canAfford = !selectedBuild || selectedBuild.type === 'tower'
+    ? true
+    : (gold ?? 0) >= (FACTORIES[selectedBuild.id]?.cost ?? 0);
   const canPlace = !!hoveredCell && !!selectedBuild && !isWaveActive && !hoveredOccupied
-    && !isPathTile(hoveredCell.col, hoveredCell.row);
+    && !isPathTile(hoveredCell.col, hoveredCell.row) && canAfford;
 
   // Auto-fit: scale the board to fill the container exactly — no manual zoom
   const BOARD_W = GRID_W * CELL;
@@ -624,7 +628,9 @@ export default function GameBoard({
           </div>
 
           {/* ── Factories ── */}
-          {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number; is_active?: boolean }>).map((f) => {
+          {(factories as Array<{ factory_id: string | number; x: number; y: number; factory_type: number; level: number; is_active?: boolean }>)
+          .filter((f) => !isWaveActive || f.is_active !== false)
+          .map((f) => {
             const fIsHighlighted = highlightedEntityId === `factory-${String(f.factory_id)}`;
             return (
               <div key={`f-${f.factory_id}`} style={{ position: 'absolute', left: Number(f.x) * CELL + 8, top: Number(f.y) * CELL + 10, zIndex: 2, pointerEvents: 'none' }}>

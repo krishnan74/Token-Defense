@@ -252,6 +252,7 @@ export default function App({ account, manifest }: AppProps) {
 
   function handleSellTower(id: number | string) {
     sfx.playSell();
+    setHighlightedEntityId((prev) => prev === `tower-${id}` ? null : prev);
     // Optimistically remove tower from list
     setOptimisticTowers((prev) =>
       (prev as Array<{ tower_id: string | number; is_alive?: boolean }>).map((t) =>
@@ -270,11 +271,18 @@ export default function App({ account, manifest }: AppProps) {
 
   function handleSellFactory(id: number | string) {
     sfx.playSell();
+    setHighlightedEntityId((prev) => prev === `factory-${id}` ? null : prev);
     setOptimisticFactories((prev) =>
       (prev as Array<{ factory_id: string | number; is_active?: boolean }>).map((f) =>
         String(f.factory_id) === String(id) ? { ...f, is_active: false } : f,
       ),
     );
+    // Match conveyor by factory grid position — factoryId holds a temp id that differs from the confirmed Torii id
+    const soldFactory = (allFactories as Array<{ factory_id: string | number; x: number; y: number }>)
+      .find((f) => String(f.factory_id) === String(id));
+    if (soldFactory) {
+      setConveyors((prev) => prev.filter((c) => !(c.fx === Number(soldFactory.x) && c.fy === Number(soldFactory.y))));
+    }
     actions.sellFactory(id as number).catch((e: unknown) => {
       console.error('sellFactory failed:', e);
       setOptimisticFactories((prev) =>
@@ -450,6 +458,7 @@ export default function App({ account, manifest }: AppProps) {
           isWaveActive={isBusy}
           baseHealth={displayBaseHealth}
           conveyors={conveyors}
+          gold={displayGold}
           highlightedEntityId={highlightedEntityId}
         />
         <TowerStatus
