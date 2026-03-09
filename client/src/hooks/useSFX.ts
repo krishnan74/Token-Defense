@@ -1,134 +1,124 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
-/**
- * Web Audio API procedural sound effects.
- * No audio files required — all sounds are synthesized.
- *
- * To replace with real audio files later, swap each play* function body
- * with: `new Audio('/sfx/FILENAME').play()`.
- *
- * Recommended free SFX downloads (freesound.org or kenney.nl):
- *   tower_fire.wav   — soft laser "pew" (short, 80ms)
- *   enemy_death.wav  — pop / squish (150ms)
- *   base_hit.wav     — low impact thud (200ms)
- *   countdown.wav    — single tick beep (80ms)
- *   wave_start.wav   — rising whoosh (300ms)
- *   wave_complete.wav — bright 4-note chime
- *   victory.wav      — triumphant fanfare (1–2s)
- *   defeat.wav       — descending sad notes (1s)
- *   click.wav        — soft UI click (30ms)
- *   place.wav        — short "thunk" for building placement
- */
+// ── Asset imports ────────────────────────────────────────────────────────────
+import sndClick        from '../../assets/audio/400 Sounds Pack/UI/sci_fi_select.wav';
+import sndPlace        from '../../assets/audio/400 Sounds Pack/Weapons/weapon_equip_short.wav';
+import sndTowerFire    from '../../assets/audio/400 Sounds Pack/Weapons/sword_clash_2.wav';
+import sndSquelch1     from '../../assets/audio/400 Sounds Pack/Combat and Gore/squelching_1.wav';
+import sndSquelch2     from '../../assets/audio/400 Sounds Pack/Combat and Gore/squelching_2.wav';
+import sndSquelch3     from '../../assets/audio/400 Sounds Pack/Combat and Gore/squelching_3.wav';
+import sndSquelch4     from '../../assets/audio/400 Sounds Pack/Combat and Gore/squelching_4.wav';
+import sndBaseHit      from '../../assets/audio/400 Sounds Pack/Weapons/harsh_thud.wav';
+import sndCountdown    from '../../assets/audio/400 Sounds Pack/Environment/clock_tick_only.wav';
+import sndWaveComplete from '../../assets/audio/400 Sounds Pack/Musical Effects/vibraphone_level_complete.wav';
+import sndVictory      from '../../assets/audio/400 Sounds Pack/Musical Effects/brass_positive_long.wav';
+import sndDefeat       from '../../assets/audio/400 Sounds Pack/Musical Effects/brass_defeated.wav';
+import sndOverclock    from '../../assets/audio/400 Sounds Pack/Retro/power_up.wav';
+import sndSell         from '../../assets/audio/400 Sounds Pack/Items/coin_collect.wav';
+import sndMatchSynth1  from '../../assets/audio/400 Sounds Pack/Match Three/match_synth_1.wav';
+import sndMatchSynth2  from '../../assets/audio/400 Sounds Pack/Match Three/match_synth_2.wav';
+import sndMatchSynth3  from '../../assets/audio/400 Sounds Pack/Match Three/match_synth_3.wav';
+import sndMatchSynth4  from '../../assets/audio/400 Sounds Pack/Match Three/match_synth_4.wav';
+import sndMatchSynth5  from '../../assets/audio/400 Sounds Pack/Match Three/match_synth_5.wav';
+import sndMatchSynth6  from '../../assets/audio/400 Sounds Pack/Match Three/match_synth_6.wav';
+
+// ── Volume per sound ─────────────────────────────────────────────────────────
+const VOLUMES: Record<string, number> = {
+  click:        0.55,
+  place:        0.65,
+  towerFire:    0.2,
+  squelch:      0.50,
+  baseHit:      0.80,
+  countdown:    0.70,
+  waveComplete: 0.75,
+  victory:      0.80,
+  defeat:       0.80,
+  overclock:    0.70,
+  sell:         0.60,
+  achievement:  0.65,
+};
+
+function preload(src: string, volume: number): HTMLAudioElement {
+  const a = new Audio(src);
+  a.volume = volume;
+  return a;
+}
+
+/** Play a sound; for polyphonic use, clone the node so overlapping calls work. */
+function play(audio: HTMLAudioElement, polyphonic = false): void {
+  const target = polyphonic ? (audio.cloneNode() as HTMLAudioElement) : audio;
+  target.volume = audio.volume;
+  target.currentTime = 0;
+  target.play().catch(() => {});
+}
 
 export function useSFX() {
-  const ctxRef = useRef<AudioContext | null>(null);
+  const refs = useRef<Record<string, HTMLAudioElement>>({});
 
-  function ctx(): AudioContext {
-    if (!ctxRef.current || ctxRef.current.state === 'closed') {
-      ctxRef.current = new AudioContext();
-    }
-    if (ctxRef.current.state === 'suspended') {
-      ctxRef.current.resume();
-    }
-    return ctxRef.current;
-  }
-
-  function osc(freq: number, type: OscillatorType, dur: number, vol = 0.25) {
-    const ac = ctx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.connect(g); g.connect(ac.destination);
-    o.type = type;
-    o.frequency.setValueAtTime(freq, ac.currentTime);
-    g.gain.setValueAtTime(vol, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
-    o.start(); o.stop(ac.currentTime + dur);
-  }
-
-  function sweep(f0: number, f1: number, type: OscillatorType, dur: number, vol = 0.2) {
-    const ac = ctx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.connect(g); g.connect(ac.destination);
-    o.type = type;
-    o.frequency.setValueAtTime(f0, ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(f1, ac.currentTime + dur);
-    g.gain.setValueAtTime(vol, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
-    o.start(); o.stop(ac.currentTime + dur);
-  }
-
-  function noise(dur: number, vol = 0.18) {
-    const ac = ctx();
-    const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src = ac.createBufferSource();
-    src.buffer = buf;
-    const g = ac.createGain();
-    src.connect(g); g.connect(ac.destination);
-    g.gain.setValueAtTime(vol, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
-    src.start(); src.stop(ac.currentTime + dur);
-  }
-
-  const playClick = useCallback(() => {
-    osc(700, 'square', 0.05, 0.18);
+  // Preload once on mount
+  useEffect(() => {
+    refs.current = {
+      click:        preload(sndClick,        VOLUMES.click),
+      place:        preload(sndPlace,        VOLUMES.place),
+      towerFire:    preload(sndTowerFire,    VOLUMES.towerFire),
+      squelch1:     preload(sndSquelch1,     VOLUMES.squelch),
+      squelch2:     preload(sndSquelch2,     VOLUMES.squelch),
+      squelch3:     preload(sndSquelch3,     VOLUMES.squelch),
+      squelch4:     preload(sndSquelch4,     VOLUMES.squelch),
+      baseHit:      preload(sndBaseHit,      VOLUMES.baseHit),
+      countdown:    preload(sndCountdown,    VOLUMES.countdown),
+      waveComplete: preload(sndWaveComplete, VOLUMES.waveComplete),
+      victory:      preload(sndVictory,      VOLUMES.victory),
+      defeat:       preload(sndDefeat,       VOLUMES.defeat),
+      overclock:    preload(sndOverclock,    VOLUMES.overclock),
+      sell:         preload(sndSell,         VOLUMES.sell),
+      matchSynth1:  preload(sndMatchSynth1,  VOLUMES.achievement),
+      matchSynth2:  preload(sndMatchSynth2,  VOLUMES.achievement),
+      matchSynth3:  preload(sndMatchSynth3,  VOLUMES.achievement),
+      matchSynth4:  preload(sndMatchSynth4,  VOLUMES.achievement),
+      matchSynth5:  preload(sndMatchSynth5,  VOLUMES.achievement),
+      matchSynth6:  preload(sndMatchSynth6,  VOLUMES.achievement),
+    };
   }, []);
 
-  const playPlace = useCallback(() => {
-    osc(300, 'square', 0.08, 0.22);
-    setTimeout(() => osc(450, 'square', 0.06, 0.15), 50);
-  }, []);
+  const playClick        = useCallback(() => play(refs.current.click),  []);
+  const playPlace        = useCallback(() => play(refs.current.place),  []);
+  const playTowerFire    = useCallback(() => play(refs.current.towerFire, true), []);
 
-  const playTowerFire = useCallback(() => {
-    sweep(520, 180, 'sawtooth', 0.09, 0.14);
-  }, []);
-
+  // Randomized squelching for enemy deaths — polyphonic
   const playEnemyDeath = useCallback(() => {
-    noise(0.1, 0.22);
-    osc(140, 'sine', 0.12, 0.18);
+    const n = Math.floor(Math.random() * 4) + 1;
+    play(refs.current[`squelch${n}`], true);
   }, []);
 
-  const playBaseHit = useCallback(() => {
-    osc(70, 'sine', 0.28, 0.55);
-    noise(0.12, 0.28);
+  // Randomized match synth for achievement unlocks
+  const playAchievement = useCallback(() => {
+    const n = Math.floor(Math.random() * 6) + 1;
+    play(refs.current[`matchSynth${n}`]);
   }, []);
 
-  const playCountdown = useCallback(() => {
-    osc(880, 'square', 0.1, 0.28);
-  }, []);
-
-  const playWaveStart = useCallback(() => {
-    sweep(280, 560, 'square', 0.18, 0.28);
-    setTimeout(() => sweep(560, 840, 'square', 0.14, 0.2), 180);
-  }, []);
-
-  const playWaveComplete = useCallback(() => {
-    const notes = [523, 659, 784, 1047];
-    notes.forEach((f, i) => setTimeout(() => osc(f, 'square', 0.18, 0.22), i * 110));
-  }, []);
-
-  const playVictory = useCallback(() => {
-    const seq = [523, 659, 784, 659, 784, 1047, 1047];
-    seq.forEach((f, i) => setTimeout(() => osc(f, 'square', 0.22, 0.28), i * 130));
-  }, []);
-
-  const playDefeat = useCallback(() => {
-    const seq = [440, 415, 392, 330, 294];
-    seq.forEach((f, i) => setTimeout(() => osc(f, 'sawtooth', 0.26, 0.28), i * 160));
-  }, []);
+  const playBaseHit      = useCallback(() => play(refs.current.baseHit),        []);
+  const playCountdown    = useCallback(() => play(refs.current.countdown),      []);
+  const playWaveStart    = useCallback(() => { /* removed per design */ },      []);
+  const playWaveComplete = useCallback(() => play(refs.current.waveComplete),   []);
+  const playVictory      = useCallback(() => play(refs.current.victory),        []);
+  const playDefeat       = useCallback(() => play(refs.current.defeat),         []);
+  const playOverclock    = useCallback(() => play(refs.current.overclock),      []);
+  const playSell         = useCallback(() => play(refs.current.sell),           []);
 
   return {
     playClick,
     playPlace,
     playTowerFire,
     playEnemyDeath,
+    playAchievement,
     playBaseHit,
     playCountdown,
     playWaveStart,
     playWaveComplete,
     playVictory,
     playDefeat,
+    playOverclock,
+    playSell,
   };
 }

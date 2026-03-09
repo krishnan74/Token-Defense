@@ -24,6 +24,7 @@ import { DENSHOKAN_ADDRESS, buildContractAddresses, parseMintedTokenId } from '.
 import { useActions } from './hooks/useActions';
 import { useAchievements } from './hooks/useAchievements';
 import type { Achievement } from './hooks/useAchievements';
+import { useBGM } from './hooks/useBGM';
 import { useGameState } from './hooks/useGameState';
 import { useOptimisticEntities } from './hooks/useOptimisticEntities';
 import { useReplay } from './hooks/useReplay';
@@ -64,7 +65,7 @@ export default function App({ account, manifest }: AppProps) {
   const { gameState, towers, factories, refreshGameState } = useGameState(tokenId);
   const actions  = useActions(account, manifest, tokenId);
   const sfx      = useSFX();
-  const { unlock, toasts: achievementToasts } = useAchievements();
+  const { unlock, toasts: achievementToasts } = useAchievements({ onUnlock: sfx.playAchievement });
   const { provider } = useProvider();
   const { contract: denshokanContract } = useContract({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,6 +100,9 @@ export default function App({ account, manifest }: AppProps) {
   });
 
   const isBusy = wave.isWaitingWaveActive || wave.countdown !== null || replay.isReplaying;
+
+  const bgmPhase = replay.isReplaying ? 'battle' : 'build';
+  const { isMuted, toggleMute } = useBGM(bgmPhase);
 
   // ── Load tokenId from localStorage when account connects ──────────────────
   useEffect(() => {
@@ -243,7 +247,7 @@ export default function App({ account, manifest }: AppProps) {
   }
 
   function handleSellTower(id: number | string) {
-    sfx.playClick();
+    sfx.playSell();
     // Optimistically remove tower from list
     setOptimisticTowers((prev) =>
       (prev as Array<{ tower_id: string | number; is_alive?: boolean }>).map((t) =>
@@ -261,7 +265,7 @@ export default function App({ account, manifest }: AppProps) {
   }
 
   function handleSellFactory(id: number | string) {
-    sfx.playClick();
+    sfx.playSell();
     setOptimisticFactories((prev) =>
       (prev as Array<{ factory_id: string | number; is_active?: boolean }>).map((f) =>
         String(f.factory_id) === String(id) ? { ...f, is_active: false } : f,
@@ -279,7 +283,7 @@ export default function App({ account, manifest }: AppProps) {
 
   function handleActivateOverclock() {
     if (overclockPending || gameState?.overclock_used) return;
-    sfx.playClick();
+    sfx.playOverclock();
     setOverclockPending(true);
     actions.activateOverclock().catch((e: unknown) => {
       console.error('activateOverclock failed:', e);
@@ -457,6 +461,10 @@ export default function App({ account, manifest }: AppProps) {
           {replay.replaySpeed}X
         </button>
       )}
+
+      <button className="app-mute-btn" onClick={toggleMute} title={isMuted ? 'Unmute music' : 'Mute music'}>
+        {isMuted ? '🔇' : '🔊'}
+      </button>
 
       {waveResult && !isBusy && (
         <WaveResultCard

@@ -34,9 +34,15 @@ function saveUnlocked(ids: Set<string>) {
   } catch { /* ignore */ }
 }
 
-export function useAchievements() {
+interface AchievementsOptions {
+  onUnlock?: () => void;
+}
+
+export function useAchievements({ onUnlock }: AchievementsOptions = {}) {
   const unlockedRef = useRef<Set<string>>(loadUnlocked());
   const [toasts, setToasts] = useState<Achievement[]>([]);
+  const onUnlockRef = useRef(onUnlock);
+  onUnlockRef.current = onUnlock;
 
   const unlock = useCallback((id: string) => {
     if (unlockedRef.current.has(id)) return;
@@ -44,6 +50,7 @@ export function useAchievements() {
     if (!ach) return;
     unlockedRef.current = new Set([...unlockedRef.current, id]);
     saveUnlocked(unlockedRef.current);
+    onUnlockRef.current?.();
     setToasts((prev) => [...prev, ach]);
     // Auto-dismiss after 4s
     setTimeout(() => {
