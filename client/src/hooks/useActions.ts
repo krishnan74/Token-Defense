@@ -38,6 +38,9 @@ export function useActions(
     newGame: (difficulty: number, overrideTokenId?: string) =>
       call(addresses.game, 'new_game', [overrideTokenId ?? tid, difficulty]),
 
+    quitGame: (overrideTokenId?: string) =>
+      call(addresses.game, 'quit_game', [overrideTokenId ?? tid]),
+
     activateOverclock: () =>
       call(addresses.game, 'activate_overclock', [tid]),
 

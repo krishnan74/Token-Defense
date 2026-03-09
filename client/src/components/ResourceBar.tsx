@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { getTokenTier, MAX_TOKEN_BALANCE } from '../constants';
 
 interface GameStateDisplay {
@@ -33,9 +34,23 @@ function TokenDisplay({
   );
 }
 
-export default function ResourceBar({ gameState }: { gameState: GameStateDisplay | null }) {
+function shorten(id: string) {
+  if (id.length <= 12) return id;
+  return id.slice(0, 6) + '…' + id.slice(-4);
+}
+
+export default function ResourceBar({ gameState, tokenId }: { gameState: GameStateDisplay | null; tokenId?: string | null }) {
+  const [copied, setCopied] = useState(false);
   if (!gameState) return null;
   const { gold, input_tokens, image_tokens, code_tokens } = gameState;
+
+  function handleCopy() {
+    if (!tokenId) return;
+    navigator.clipboard.writeText(tokenId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
 
   return (
     <div style={styles.bar}>
@@ -52,6 +67,20 @@ export default function ResourceBar({ gameState }: { gameState: GameStateDisplay
       <TokenDisplay icon="▲" label="INPUT" value={input_tokens ?? 0} color="#63B3ED" />
       <TokenDisplay icon="■" label="IMAGE" value={image_tokens ?? 0} color="#68D391" />
       <TokenDisplay icon="●" label="CODE"  value={code_tokens  ?? 0} color="#FC8181" />
+
+      {/* Token ID */}
+      {tokenId && (
+        <>
+          <div style={{ ...styles.divider, marginLeft: 'auto' }} />
+          <div style={styles.tokenIdBlock}>
+            <span style={styles.tokenIdLabel}>ID</span>
+            <span style={styles.tokenIdValue}>{shorten(tokenId)}</span>
+            <button style={styles.copyBtn} onClick={handleCopy} title="Copy Token ID">
+              {copied ? '✓' : '⧉'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -91,5 +120,19 @@ const styles = {
   tierBadge: {
     fontFamily: "'VT323', monospace", fontSize: 11,
     padding: '0 4px', letterSpacing: 0.5, marginLeft: 2,
+  },
+  tokenIdBlock: {
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '0 10px',
+  },
+  tokenIdLabel: {
+    fontFamily: "'VT323', monospace", fontSize: 14, color: '#6B3A1E', letterSpacing: 1,
+  },
+  tokenIdValue: {
+    fontFamily: "'VT323', monospace", fontSize: 15, color: '#7A5A3A', letterSpacing: 0.5,
+  },
+  copyBtn: {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    color: '#6B3A1E', fontSize: 14, padding: '0 2px', lineHeight: 1,
   },
 };

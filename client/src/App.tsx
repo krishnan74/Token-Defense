@@ -44,6 +44,11 @@ interface AppProps {
   manifest: { contracts: ManifestContract[] } | null;
 }
 
+// Read ?id= URL param once on load
+const URL_TOKEN_ID = (() => {
+  try { return new URLSearchParams(window.location.search).get('id'); } catch { return null; }
+})();
+
 export default function App({ account, manifest }: AppProps) {
   const [tokenId,           setTokenId]           = useState<string | null>(null);
   const [selectedBuild,     setSelectedBuild]     = useState<BuildSelection | null>(null);
@@ -57,11 +62,14 @@ export default function App({ account, manifest }: AppProps) {
   const [showTour,          setShowTour]          = useState(false);
   const [highlightedEntityId, setHighlightedEntityId] = useState<string | null>(null);
   const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
+  const [resumeError,       setResumeError]       = useState<string | null>(null);
+  const [isResuming,        setIsResuming]        = useState(false);
 
   const clientBaseHealthRef     = useRef<number>(BASE_MAX_HP);
   const clientBaseHealthInitRef = useRef(false);
   const sfxPrevRef              = useRef({ particles: 0, shakes: 0 });
   const sfxFireCooldownRef      = useRef(0);
+  const isResumingRef           = useRef(false);
 
   const { gameState, towers, factories, refreshGameState } = useGameState(tokenId);
   const actions  = useActions(account, manifest, tokenId);
@@ -108,12 +116,69 @@ export default function App({ account, manifest }: AppProps) {
   const bgmPhase = replay.isReplaying ? 'battle' : 'build';
   const { isMuted, toggleMute } = useBGM(bgmPhase);
 
-  // ── Load tokenId from localStorage when account connects ──────────────────
+  // ── Load tokenId from localStorage (or URL param) when account connects ───
   useEffect(() => {
     if (!account?.address) { setTokenId(null); return; }
+    // URL param takes priority — will be validated once gameState loads
+    if (URL_TOKEN_ID) { setTokenId(URL_TOKEN_ID); return; }
     const saved = localStorage.getItem(`td:tokenId:${account.address}`);
     if (saved) setTokenId(saved);
   }, [account?.address]);
+
+  // ── Sync browser URL with active tokenId ─────────────────────────────────
+  useEffect(() => {
+    if (tokenId) window.history.replaceState(null, '', `/?id=${tokenId}`);
+    else         window.history.replaceState(null, '', '/');
+  }, [tokenId]);
+
+  // ── Validate player address when resuming (URL param or manual) ───────────
+  useEffect(() => {
+    if (!gameState || !account?.address) return;
+    if (!URL_TOKEN_ID && !isResumingRef.current) return;
+    const normalize = (addr: string) => BigInt(addr).toString(16).toLowerCase();
+    try {
+      if (normalize(gameState.player.toString()) !== normalize(account.address)) {
+        setResumeError('This session belongs to a different wallet. Please connect the correct account.');
+        setTokenId(null);
+        isResumingRef.current = false;
+        setIsResuming(false);
+        return;
+      }
+    } catch { /* ignore parse errors */ }
+    if (gameState.game_over || gameState.victory) {
+      setResumeError('This game session has already ended.');
+      setTokenId(null);
+      isResumingRef.current = false;
+      setIsResuming(false);
+      return;
+    }
+    isResumingRef.current = false;
+    setIsResuming(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.token_id]);
+
+  // ── Poll Torii every 2s while resuming (subscription alone is unreliable) ──
+  useEffect(() => {
+    if (!isResuming) return;
+    const interval = setInterval(refreshGameState, 2000);
+    return () => clearInterval(interval);
+  }, [isResuming, refreshGameState]);
+
+  // ── Timeout: show error if game state never loads after resume ─────────────
+  useEffect(() => {
+    if (!isResuming) return;
+    const t = setTimeout(() => {
+      setIsResuming((current) => {
+        if (current) {
+          isResumingRef.current = false;
+          setResumeError('Session not found. Check your Token ID and try again.');
+          setTokenId(null);
+        }
+        return false;
+      });
+    }, 10000);
+    return () => clearTimeout(t);
+  }, [isResuming]);
 
   // ── Mint a Denshokan ERC721 token then call new_game ─────────────────────
   async function mintAndStart(difficulty: number): Promise<void> {
@@ -307,6 +372,35 @@ export default function App({ account, manifest }: AppProps) {
     });
   }
 
+  function handleQuitGame() {
+    if (!tokenId || !account) return;
+    if (!window.confirm('Quit this game? This will forfeit your session on-chain and cannot be undone.')) return;
+    const quitTokenId = tokenId;
+    // Clear local session immediately
+    localStorage.removeItem(`td:tokenId:${account.address}`);
+    setTokenId(null);
+    setConveyors([]);
+    setGameOver(null);
+    setWaveResult(null);
+    setGameStats(EMPTY_STATS);
+    clientBaseHealthInitRef.current = false;
+    // Fire quit tx — best-effort, session is already cleared locally
+    actions.quitGame(quitTokenId).catch((e: unknown) => console.error('quitGame failed:', e));
+  }
+
+  function handleResume(id: string) {
+    setResumeError(null);
+    // Normalize to hex — accept decimal or short hex input
+    let normalized = id.trim();
+    if (!normalized.startsWith('0x')) {
+      try { normalized = '0x' + BigInt(normalized).toString(16); }
+      catch { setResumeError('Invalid Token ID format.'); return; }
+    }
+    isResumingRef.current = true;
+    setIsResuming(true);
+    setTokenId(normalized);
+  }
+
   function handleActivateOverclock() {
     if (overclockPending || gameState?.overclock_used) return;
     sfx.playOverclock();
@@ -417,8 +511,8 @@ export default function App({ account, manifest }: AppProps) {
       : clientBaseHealthDisplay;
 
   // ── Early returns ──────────────────────────────────────────────────────────
-  if (!account) return <MenuScreen mode="connect" onAction={undefined} />;
-  if (isStartingGame) return <LoadingScreen />;
+  if (!account) return <MenuScreen mode="connect" onAction={undefined} urlTokenId={URL_TOKEN_ID} />;
+  if (isStartingGame || isResuming) return <LoadingScreen mode={isResuming ? 'resume' : 'deploy'} />;
   if (!gameState) {
     return (
       <MenuScreen
@@ -426,6 +520,9 @@ export default function App({ account, manifest }: AppProps) {
         selectedDifficulty={selectedDifficulty}
         onSelectDifficulty={setSelectedDifficulty}
         onAction={() => handleNewGame(selectedDifficulty)}
+        urlTokenId={URL_TOKEN_ID}
+        onResume={handleResume}
+        resumeError={resumeError}
       />
     );
   }
@@ -439,7 +536,7 @@ export default function App({ account, manifest }: AppProps) {
 
   return (
     <div className="app-root">
-      <ResourceBar gameState={displayGameState} />
+      <ResourceBar gameState={displayGameState} tokenId={tokenId} />
       <WavePanel
         gameState={displayGameState}
         isWaveActive={isBusy}
@@ -447,6 +544,7 @@ export default function App({ account, manifest }: AppProps) {
         overclockAvailable={!gameState.overclock_used && !overclockPending && !isBusy && displayGold >= OVERCLOCK_COST}
         onStartWave={() => wave.handleStartWave(isBusy, displayGold)}
         onOverclock={handleActivateOverclock}
+        onQuit={handleQuitGame}
       />
       <div className="app-layout">
         <GameBoard

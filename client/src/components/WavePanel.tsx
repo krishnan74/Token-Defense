@@ -7,6 +7,7 @@ interface WavePanelProps {
   overclockAvailable: boolean;
   onStartWave: () => void;
   onOverclock: () => void;
+  onQuit: () => void;
 }
 
 const ENEMY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -21,7 +22,7 @@ const ENEMY_SHORT: Record<string, string> = {
 };
 
 export default function WavePanel({
-  gameState, isWaveActive, isCountingDown, overclockAvailable, onStartWave, onOverclock,
+  gameState, isWaveActive, isCountingDown, overclockAvailable, onStartWave, onOverclock, onQuit,
 }: WavePanelProps) {
   if (!gameState) return null;
   const { wave_number, is_wave_active } = gameState;
@@ -84,6 +85,13 @@ export default function WavePanel({
           title={`Doubles all tower fire rates for this wave (costs ${OVERCLOCK_COST}g)`}
         >
           {overclockAvailable ? `⚡ OVERCLOCK (${OVERCLOCK_COST}g)` : '⚡ USED'}
+        </button>
+      )}
+
+      {/* Quit button — only available between waves */}
+      {!busy && (
+        <button style={styles.quitBtn} onClick={onQuit} title="Forfeit this game session">
+          ✕ QUIT
         </button>
       )}
 
@@ -150,6 +158,15 @@ const styles = {
   overclockUsed: {
     background: '#2A1A3A', color: '#604880', border: '2px solid #3A2A5A',
     cursor: 'default', boxShadow: 'none',
+  },
+  quitBtn: {
+    padding: '4px 10px',
+    background: '#3A0A0A', color: '#D9534F',
+    border: '2px solid #7A1A1A',
+    borderRadius: 0, cursor: 'pointer',
+    fontFamily: "'VT323', monospace", fontSize: 16,
+    letterSpacing: 0.5,
+    boxShadow: '2px 2px 0 #1A0000',
   },
   btn: {
     marginLeft: 'auto' as const,

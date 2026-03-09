@@ -42,7 +42,13 @@ export function useGameState(tokenId: string | null): {
   }, []);
 
   useEffect(() => {
-    if (!tokenId || !sdk) return;
+    if (!tokenId || !sdk) {
+      // tokenId cleared (quit/logout) — return to menu immediately
+      setGameState(null);
+      setTowers([]);
+      setFactories([]);
+      return;
+    }
 
     // Clear stale state from any previous tokenId so the loading screen
     // doesn't dismiss prematurely while waiting for the new game to appear.
