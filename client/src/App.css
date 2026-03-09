@@ -148,23 +148,6 @@
 }
 .app-speed-btn:hover { background: #4A2510; }
 
-/* Mute button */
-.app-mute-btn {
-  position: fixed;
-  bottom: 14px;
-  right: 14px;
-  padding: 6px 10px;
-  background: #1A0A00;
-  border: 2px solid #6B3A1A;
-  border-radius: 6px;
-  color: #F0C060;
-  font-size: 18px;
-  cursor: pointer;
-  box-shadow: 2px 2px 0 #0A0500;
-  z-index: 300;
-  transition: background 0.1s;
-}
-.app-mute-btn:hover { background: #2A1A08; }
 
 /* ── Countdown overlay ──────────────────────────────────────────────────── */
 .app-countdown-overlay {

@@ -1,4 +1,4 @@
-import { MAX_TOKEN_BALANCE } from '../constants';
+import { getTokenTier, MAX_TOKEN_BALANCE } from '../constants';
 
 interface GameStateDisplay {
   gold: number;
@@ -12,17 +12,23 @@ interface GameStateDisplay {
 function TokenDisplay({
   icon, label, value, color,
 }: { icon: string; label: string; value: number; color: string }) {
-  const pct = value / MAX_TOKEN_BALANCE;
-  const atCap  = value >= MAX_TOKEN_BALANCE;
+  const pct     = value / MAX_TOKEN_BALANCE;
+  const atCap   = value >= MAX_TOKEN_BALANCE;
   const nearCap = pct >= 0.85;
+  const tier    = getTokenTier(value, MAX_TOKEN_BALANCE);
   const displayColor = nearCap ? '#FFD700' : color;
   return (
     <div style={styles.resource}>
       <span style={styles.icon}>{icon}</span>
       <span style={styles.label}>{label}</span>
       <span style={{ ...styles.value, color: displayColor }}>{value}</span>
-      <span style={{ ...styles.cap, color: nearCap ? '#FFD700' : '#4A2510' }}>/{MAX_TOKEN_BALANCE}</span>
-      {atCap && <span style={styles.capWarning}>CAPPED</span>}
+      <span style={{ ...styles.cap, color: nearCap ? '#FFD700' : '#7A5A3A' }}>/{MAX_TOKEN_BALANCE}</span>
+      {atCap
+        ? <span style={styles.capWarning}>CAPPED</span>
+        : <span style={{ ...styles.tierBadge, background: tier.color + '30', color: tier.color, border: `1px solid ${tier.color}60` }}>
+            {tier.label}
+          </span>
+      }
     </div>
   );
 }
@@ -81,5 +87,9 @@ const styles = {
     color: '#FF4444', background: '#4A0000',
     padding: '1px 4px', letterSpacing: 0.5,
     border: '1px solid #6A0000', marginLeft: 2,
+  },
+  tierBadge: {
+    fontFamily: "'VT323', monospace", fontSize: 11,
+    padding: '0 4px', letterSpacing: 0.5, marginLeft: 2,
   },
 };

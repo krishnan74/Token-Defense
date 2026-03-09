@@ -9,9 +9,11 @@ interface TowerStatusProps {
   onUpgradeTower: (towerId: number | string) => void;
   onSellTower: (towerId: number | string) => void;
   onSellFactory: (factoryId: number | string) => void;
+  highlightedEntityId?: string | null;
+  onHighlight?: (id: string | null) => void;
 }
 
-export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, gameState }: TowerStatusProps) {
+export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTower, onSellTower, onSellFactory, gameState, highlightedEntityId, onHighlight }: TowerStatusProps) {
   const aliveTowerCount = (towers as Array<{ is_alive?: boolean }>).filter((t) => t.is_alive !== false).length;
   const maxHp     = getDifficultyBaseHp(gameState?.difficulty ?? 1);
   const baseHealth = gameState?.base_health ?? maxHp;
@@ -51,8 +53,20 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
         const fillColor = pct > 55 ? '#5CB85C' : pct > 22 ? '#F0AD4E' : '#D9534F';
         const upgCost   = TOWER_UPGRADE_COST[level];
         const canUpgradeTower = alive && level < 3 && !gameState?.is_wave_active && (gameState?.gold ?? 0) >= (upgCost ?? 9999);
+        const idStr = String(t.tower_id);
+        const isHighlighted = highlightedEntityId === `tower-${idStr}`;
         return (
-          <div key={String(t.tower_id)} style={{ ...styles.card, opacity: alive ? 1 : 0.35 }}>
+          <div
+            key={idStr}
+            style={{
+              ...styles.card,
+              opacity: alive ? 1 : 0.35,
+              cursor: 'pointer',
+              outline: isHighlighted ? '2px solid #00E5FF' : 'none',
+              boxShadow: isHighlighted ? '0 0 8px #00E5FF, 2px 2px 0 #0A0500' : styles.card.boxShadow,
+            }}
+            onClick={() => onHighlight?.(isHighlighted ? null : `tower-${idStr}`)}
+          >
             <div style={styles.cardRow}>
               <span style={styles.cardName}>{def?.name}</span>
               <div style={{ display: 'flex', gap: 4 }}>
@@ -69,7 +83,7 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
                 <button
                   style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgradeTower ? 1 : 0.4 }}
                   disabled={!canUpgradeTower}
-                  onClick={() => onUpgradeTower(t.tower_id)}
+                  onClick={(e) => { e.stopPropagation(); onUpgradeTower(t.tower_id); }}
                 >
                   ↑ ({upgCost}g)
                 </button>
@@ -77,7 +91,7 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
               {alive && !gameState?.is_wave_active && (
                 <button
                   style={{ ...styles.sellBtn, flex: level < 3 ? '0 0 auto' : 1 }}
-                  onClick={() => onSellTower(t.tower_id)}
+                  onClick={(e) => { e.stopPropagation(); onSellTower(t.tower_id); }}
                   title="Remove tower (free)"
                 >
                   ✕
@@ -95,8 +109,19 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
         const def  = FACTORIES[Number(f.factory_type)];
         const prod = Math.floor(def.baseOutput * (1 + 0.5 * (Number(f.level) - 1)));
         const canUpgrade = !gameState?.is_wave_active && (gameState?.gold ?? 0) >= 50;
+        const fIdStr = String(f.factory_id);
+        const isFHighlighted = highlightedEntityId === `factory-${fIdStr}`;
         return (
-          <div key={String(f.factory_id)} style={styles.card}>
+          <div
+            key={fIdStr}
+            style={{
+              ...styles.card,
+              cursor: 'pointer',
+              outline: isFHighlighted ? '2px solid #00E5FF' : 'none',
+              boxShadow: isFHighlighted ? '0 0 8px #00E5FF, 2px 2px 0 #0A0500' : styles.card.boxShadow,
+            }}
+            onClick={() => onHighlight?.(isFHighlighted ? null : `factory-${fIdStr}`)}
+          >
             <div style={styles.cardRow}>
               <span style={styles.cardName}>{def?.name}</span>
               <span style={{ ...styles.badge, background: '#4A7A20', color: '#C6F6C6' }}>Lv{f.level}</span>
@@ -106,14 +131,14 @@ export default function TowerStatus({ towers, factories, onUpgrade, onUpgradeTow
               <button
                 style={{ ...styles.upgradeBtn, flex: 1, opacity: canUpgrade ? 1 : 0.4 }}
                 disabled={!canUpgrade}
-                onClick={() => onUpgrade(f.factory_id)}
+                onClick={(e) => { e.stopPropagation(); onUpgrade(f.factory_id); }}
               >
                 ↑ (50g)
               </button>
               {!gameState?.is_wave_active && (
                 <button
                   style={{ ...styles.sellBtn, flex: '0 0 auto' }}
-                  onClick={() => onSellFactory(f.factory_id)}
+                  onClick={(e) => { e.stopPropagation(); onSellFactory(f.factory_id); }}
                   title={`Sell factory (refund ${def.cost / 2}g)`}
                 >
                   ✕ {def.cost / 2}g
@@ -137,11 +162,11 @@ const styles = {
   },
   sectionTitle: {
     fontFamily: "'VT323', monospace",
-    color: '#6B3A1E', fontSize: 15, letterSpacing: 2, marginBottom: 5,
+    color: '#C8905A', fontSize: 15, letterSpacing: 2, marginBottom: 5,
   },
   empty: {
     fontFamily: "'VT323', monospace",
-    color: '#4A2510', fontSize: 15, marginBottom: 6, letterSpacing: 1,
+    color: '#8A5A3A', fontSize: 15, marginBottom: 6, letterSpacing: 1,
   },
   card: {
     background: '#3A1A0A',
@@ -153,7 +178,7 @@ const styles = {
   cardName: {
     fontFamily: "'VT323', monospace", color: '#F5E6C8', fontSize: 17, letterSpacing: 0.5,
   },
-  idTag: { fontFamily: "'VT323', monospace", color: '#6B3A1E', fontSize: 14 },
+  idTag: { fontFamily: "'VT323', monospace", color: '#9A6A4A', fontSize: 14 },
   badge: {
     fontFamily: "'VT323', monospace",
     fontSize: 13, padding: '0 5px',
@@ -161,7 +186,7 @@ const styles = {
   },
   hpTrack: { height: 5, background: '#1A0D05', border: '1px solid #4A2510', marginBottom: 3 },
   hpFill:  { height: '100%', transition: 'width 0.3s' },
-  sub: { fontFamily: "'VT323', monospace", color: '#6B3A1E', fontSize: 14 },
+  sub: { fontFamily: "'VT323', monospace", color: '#9A6A4A', fontSize: 14 },
   upgradeBtn: {
     marginTop: 5, padding: '3px 0',
     background: '#2A4A10', color: '#A8D8A8',

@@ -55,6 +55,7 @@ export default function App({ account, manifest }: AppProps) {
   const [overclockPending,  setOverclockPending]  = useState(false);
   const [conveyors,         setConveyors]         = useState<Conveyor[]>([]);
   const [showTour,          setShowTour]          = useState(false);
+  const [highlightedEntityId, setHighlightedEntityId] = useState<string | null>(null);
   const [clientBaseHealthDisplay, setClientBaseHealthDisplay] = useState<number>(BASE_MAX_HP);
 
   const clientBaseHealthRef     = useRef<number>(BASE_MAX_HP);
@@ -78,10 +79,12 @@ export default function App({ account, manifest }: AppProps) {
     setOptimisticTowers, setOptimisticFactories, setOptimisticGoldSpent, setUpgradeOptimistic,
   } = useOptimisticEntities(towers as never, factories as never, gameState);
 
-  const displayGold = (gameState?.gold ?? 0)
+  const displayGold = Math.max(0,
+    (gameState?.gold ?? 0)
     - optimisticGoldSpent
     - upgradeOptimistic.gold
-    - (overclockPending ? OVERCLOCK_COST : 0);
+    - (overclockPending ? OVERCLOCK_COST : 0),
+  );
 
   const replay = useReplay({
     sfx, unlock,
@@ -424,6 +427,7 @@ export default function App({ account, manifest }: AppProps) {
           isWaveActive={isBusy}
           baseHealth={displayBaseHealth}
           conveyors={conveyors}
+          highlightedEntityId={highlightedEntityId}
         />
         <TowerStatus
           towers={allTowers}
@@ -433,12 +437,16 @@ export default function App({ account, manifest }: AppProps) {
           onUpgradeTower={handleUpgradeTower}
           onSellTower={handleSellTower}
           onSellFactory={handleSellFactory}
+          highlightedEntityId={highlightedEntityId}
+          onHighlight={setHighlightedEntityId}
         />
       </div>
       <BuildMenu
         selected={selectedBuild}
         onSelect={(s) => { sfx.playClick(); setSelectedBuild(s); }}
         gameState={displayGameState}
+        isMuted={isMuted}
+        toggleMute={toggleMute}
       />
 
       {wave.countdown !== null && (
@@ -461,10 +469,6 @@ export default function App({ account, manifest }: AppProps) {
           {replay.replaySpeed}X
         </button>
       )}
-
-      <button className="app-mute-btn" onClick={toggleMute} title={isMuted ? 'Unmute music' : 'Mute music'}>
-        {isMuted ? '🔇' : '🔊'}
-      </button>
 
       {waveResult && !isBusy && (
         <WaveResultCard
