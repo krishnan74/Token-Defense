@@ -51,13 +51,14 @@
     },
     {
       "address": "0x6861bcd95eca8d269191997803114cc3efa298c2c277a3ed1f75ffdbfed34c1",
-      "class_hash": "0x4191032e35878cfeb2c423c875e67c9f530c47e0a56df8a914d463007e5fd0d",
+      "class_hash": "0x5e155eb8a1c67e6e2d68a78e7ea10d00e4730beda7c40678e20a391cf0732bc",
       "init_calldata": [],
       "tag": "td-game_system",
       "selector": "0x5181ca5c2a3ffae64a9316e77191f5182d81882d1589dbccff129ca3c48247c",
       "systems": [
         "dojo_init",
         "new_game",
+        "quit_game",
         "activate_overclock",
         "initialize_egs",
         "upgrade"
@@ -3277,6 +3278,18 @@
             {
               "name": "difficulty",
               "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "quit_game",
+          "inputs": [
+            {
+              "name": "token_id",
+              "type": "core::felt252"
             }
           ],
           "outputs": [],
