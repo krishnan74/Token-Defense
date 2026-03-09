@@ -299,6 +299,14 @@ export default function App({ account, manifest }: AppProps) {
     if (col === BASE_X && row === BASE_Y) return;
     if (isPathTile(col, row)) return;
 
+    // Prevent placing on a cell already occupied by a tower or factory
+    const cellOccupied =
+      (allTowers as Array<{ x: number; y: number; is_alive?: boolean }>)
+        .some((t) => t.is_alive !== false && Number(t.x) === col && Number(t.y) === row) ||
+      (allFactories as Array<{ x: number; y: number; is_active?: boolean }>)
+        .some((f) => f.is_active !== false && Number(f.x) === col && Number(f.y) === row);
+    if (cellOccupied) return;
+
     if (selectedBuild.type === 'tower') {
       const def   = TOWERS[selectedBuild.id];
       const tempId = `opt-${Date.now()}`;

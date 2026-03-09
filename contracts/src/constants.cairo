@@ -46,6 +46,22 @@ pub const BASE_MAX_HP: u32 = 25;      // Normal difficulty default
 pub const WAVE_GOLD_BASE: u32 = 60;   // base gold rewarded after each wave
 pub const WAVE_GOLD_PER_WAVE: u32 = 15; // additional gold per wave number
 
+// ── Grid bounds ───────────────────────────────────────────────────────────────
+pub const GRID_W: u32 = 12; // columns 0–11
+pub const GRID_H: u32 = 8;  // rows    0–7
+
+// ── Path / base tile detection ────────────────────────────────────────────────
+// Mirrors client-side isPathTile().  Returns true for any cell on the enemy
+// walk path OR the base cell (0,6) — neither can be built on.
+pub fn is_blocked_tile(x: u32, y: u32) -> bool {
+    if y == 1 && x >= 9 { return true; }           // row 1 cols 9-11 (entry segment)
+    if x == 9 && y >= 1 && y <= 3 { return true; } // col 9 rows 1-3
+    if y == 3 && x >= 5 && x <= 9 { return true; } // row 3 cols 5-9
+    if x == 5 && y >= 3 && y <= 6 { return true; } // col 5 rows 3-6
+    if y == 6 && x <= 5 { return true; }            // row 6 cols 0-5 (incl. base 0,6)
+    false
+}
+
 // ── Enemy constants ───────────────────────────────────────────────────────────
 // Types: 0=TextJailbreak, 1=ContextOverflow, 2=HalluSwarm, 3=Boss
 pub const TJ_HP: u32 = 20;

@@ -14,7 +14,11 @@ pub mod building_system {
     use starknet::get_caller_address;
     use dojo::model::ModelStorage;
     use crate::models::{GameState, Tower, Factory};
-    use crate::constants::{UPGRADE_COST, MAX_TOWERS, tower_max_hp, factory_cost, tower_upgrade_cost, DENSHOKAN_ADDRESS};
+    use crate::constants::{
+        UPGRADE_COST, MAX_TOWERS, GRID_W, GRID_H,
+        tower_max_hp, factory_cost, tower_upgrade_cost,
+        is_blocked_tile, DENSHOKAN_ADDRESS,
+    };
     use game_components_embeddable_game_standard::minigame::minigame::{pre_action, post_action};
 
     #[abi(embed_v0)]
@@ -31,6 +35,32 @@ pub mod building_system {
             assert(!game.game_over, 'Game over');
             assert(tower_type <= 2, 'Invalid tower type');
             assert(game.active_tower_count < MAX_TOWERS, 'Tower cap reached');
+            assert(x < GRID_W && y < GRID_H, 'Out of bounds');
+            assert(!is_blocked_tile(x, y), 'Cannot build on path/base');
+
+            // Ensure no alive tower already occupies this cell
+            let mut t_idx: u32 = 0;
+            loop {
+                if t_idx >= game.next_tower_id { break; }
+                let existing: Tower = world.read_model((token_id, t_idx));
+                assert(
+                    !(existing.is_alive && existing.x == x && existing.y == y),
+                    'Cell occupied',
+                );
+                t_idx += 1;
+            };
+
+            // Ensure no active factory already occupies this cell
+            let mut f_idx: u32 = 0;
+            loop {
+                if f_idx >= game.next_factory_id { break; }
+                let existing: Factory = world.read_model((token_id, f_idx));
+                assert(
+                    !(existing.is_active && existing.x == x && existing.y == y),
+                    'Cell occupied',
+                );
+                f_idx += 1;
+            };
 
             let max_health = tower_max_hp(tower_type);
 
@@ -64,6 +94,32 @@ pub mod building_system {
             assert(game.player == caller, 'Not your session');
             assert(!game.game_over, 'Game over');
             assert(factory_type <= 2, 'Invalid factory type');
+            assert(x < GRID_W && y < GRID_H, 'Out of bounds');
+            assert(!is_blocked_tile(x, y), 'Cannot build on path/base');
+
+            // Ensure no alive tower already occupies this cell
+            let mut t_idx: u32 = 0;
+            loop {
+                if t_idx >= game.next_tower_id { break; }
+                let existing: Tower = world.read_model((token_id, t_idx));
+                assert(
+                    !(existing.is_alive && existing.x == x && existing.y == y),
+                    'Cell occupied',
+                );
+                t_idx += 1;
+            };
+
+            // Ensure no active factory already occupies this cell
+            let mut f_idx: u32 = 0;
+            loop {
+                if f_idx >= game.next_factory_id { break; }
+                let existing: Factory = world.read_model((token_id, f_idx));
+                assert(
+                    !(existing.is_active && existing.x == x && existing.y == y),
+                    'Cell occupied',
+                );
+                f_idx += 1;
+            };
 
             let cost = factory_cost(factory_type);
             assert(game.gold >= cost, 'Not enough gold');
