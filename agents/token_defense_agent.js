@@ -11,7 +11,7 @@
  *   PRIVATE_KEY=0x... ACCOUNT_ADDRESS=0x... TOKEN_ID=0x... node agents/token_defense_agent.js
  *
  * TOKEN_ID: Denshokan ERC721 token — mint one at the game UI first.
- * DIFFICULTY: 0=Easy (300g, 30HP) | 1=Normal (200g, 20HP) | 2=Hard (120g, 10HP)
+ * DIFFICULTY: 0=Easy (300g, 35HP) | 1=Normal (200g, 25HP) | 2=Hard (120g, 12HP)
  */
 
 import { Account, RpcProvider } from 'starknet';
@@ -25,9 +25,9 @@ const ACCOUNT_ADDR = process.env.ACCOUNT_ADDRESS;
 const TOKEN_ID     = process.env.TOKEN_ID;
 const DIFFICULTY   = Number(process.env.DIFFICULTY ?? 0);
 
-const GAME_SYSTEM     = '0x4bb6b0105b495d3583522da9e3f21cfc82d959c1f6f95fb285968d567630785';
-const BUILDING_SYSTEM = '0xd4a4c2d21088e19286e1d5c0711d063c2246e42ded194ab4315d46765c6789';
-const WAVE_SYSTEM     = '0x1bfe8ed70acd5c057dd8e6547a516150503963023a29acd4c6fc7872c63658f';
+const GAME_SYSTEM     = '0x6861bcd95eca8d269191997803114cc3efa298c2c277a3ed1f75ffdbfed34c1';
+const BUILDING_SYSTEM = '0x2194878721f2ed30e4a5eebcbfa5fc1bcefd6ddb66d8eb319ef94ef5d72ea18';
+const WAVE_SYSTEM     = '0x719db1b998b8992871ed9019fabe798fc763c83eb9a14c231938779e52f8e50';
 
 // ── Grid & path ───────────────────────────────────────────────────────────────
 
@@ -58,7 +58,8 @@ const TOWER_PLAN = [
   { type: 0, x: 1,  y: 5 },   // covers y=6 near base
 ];
 
-// Input factories (type 0, 100g each) — produce tokens for GPT towers.
+// Input factories (type 0, 100g each) — produce 30 input tokens/wave for GPT towers.
+// Token cap is 150 per type. Upgrade each factory for +50% output per level (max L3).
 const FACTORY_PLAN = [
   { type: 0, x: 6,  y: 0,  cost: 100 },  // feeds tower at (7,0)
   { type: 0, x: 11, y: 0,  cost: 100 },  // feeds tower at (10,0)
@@ -85,8 +86,9 @@ async function getGameState() {
       tdGameStateModels(where: { token_idEQ: $tokenId }) {
         edges { node {
           wave_number gold base_health
-          next_tower_id next_factory_id
+          next_tower_id next_factory_id active_tower_count
           input_tokens image_tokens code_tokens
+          game_over victory endless_mode overclock_used
         }}
       }
     }
@@ -98,22 +100,22 @@ async function getTowers() {
   const data = await gql(`
     query GetTowers($tokenId: String!) {
       tdTowerModels(where: { token_idEQ: $tokenId }, limit: 50) {
-        edges { node { tower_id tower_type x y hp level } }
+        edges { node { tower_id tower_type x y health max_health is_alive level } }
       }
     }
   `, { tokenId: TOKEN_ID });
-  return (data?.tdTowerModels?.edges ?? []).map(e => e.node);
+  return (data?.tdTowerModels?.edges ?? []).map(e => e.node).filter(t => t.is_alive);
 }
 
 async function getFactories() {
   const data = await gql(`
     query GetFactories($tokenId: String!) {
       tdFactoryModels(where: { token_idEQ: $tokenId }, limit: 20) {
-        edges { node { factory_id factory_type x y level } }
+        edges { node { factory_id factory_type x y level is_active } }
       }
     }
   `, { tokenId: TOKEN_ID });
-  return (data?.tdFactoryModels?.edges ?? []).map(e => e.node);
+  return (data?.tdFactoryModels?.edges ?? []).map(e => e.node).filter(f => f.is_active);
 }
 
 // Poll until wave_number changes or base_health hits 0.
@@ -230,8 +232,8 @@ async function main() {
   if (!state) throw new Error('Game state not found in Torii after new_game');
   console.log(`      gold=${state.gold} base_health=${state.base_health}\n`);
 
-  // Wave loop
-  while (Number(state.wave_number) < 10 && Number(state.base_health) > 0) {
+  // Wave loop — runs until game_over, victory, or base destroyed
+  while (!state.game_over && !state.victory && Number(state.base_health) > 0) {
     const wave = Number(state.wave_number) + 1;
     console.log(`[Wave ${wave}] Building defenses...`);
 
@@ -251,18 +253,18 @@ async function main() {
 
     state = await waitForWaveComplete(wave - 1);
 
-    console.log(`  result → base_health=${state.base_health} gold=${state.gold}\n`);
-    if (Number(state.base_health) <= 0) break;
+    console.log(`  result → base_health=${state.base_health} gold=${state.gold} game_over=${state.game_over} victory=${state.victory}\n`);
+    if (Number(state.base_health) <= 0 || state.game_over) break;
   }
 
   // Outcome
   const finalWave = Number(state.wave_number);
   const finalHp   = Number(state.base_health);
   console.log('===================');
-  if (finalHp <= 0) {
+  if (state.game_over || finalHp <= 0) {
     console.log(`DEFEATED on wave ${finalWave}. Base destroyed.`);
-  } else if (finalWave >= 10) {
-    console.log(`VICTORY! Survived all 10 waves. Base HP: ${finalHp}`);
+  } else if (state.victory) {
+    console.log(`VICTORY! Survived all 10 waves. Base HP: ${finalHp}. Score: ${finalWave * 1000 + finalHp}`);
   } else {
     console.log(`Stopped at wave ${finalWave}. Base HP: ${finalHp}`);
   }
